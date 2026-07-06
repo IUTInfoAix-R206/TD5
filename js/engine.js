@@ -9,6 +9,8 @@
 // `initSqlJs` est fourni par vendor/sqljs/sql-wasm.js (chargé en <script> classique
 // dans index.html, donc disponible en global).
 
+import { rewriteQuantifiers } from "./sql-quantifiers.js";
+
 let SQL = null;
 let snapshot = null;
 
@@ -41,6 +43,9 @@ export function runQuery(sql) {
   const db = new SQL.Database(snapshot);
   registerFunctions(db);
   try {
+    // Réécrit les comparaisons quantifiées ALL/ANY (syntaxe Oracle/standard non
+    // gérée par SQLite) en équivalents MAX/MIN/IN. Idempotent sur le SQL déjà réécrit.
+    sql = rewriteQuantifiers(sql);
     let cols = [];
     let rows = [];
     let sawStatement = false;
