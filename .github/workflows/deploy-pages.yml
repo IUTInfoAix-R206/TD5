@@ -1,0 +1,68 @@
+# Déploiement du site sur GitHub Pages, avec réessai automatique.
+#
+# Le déploiement Pages (actions/deploy-pages) échoue parfois sur une erreur
+# transitoire d'infrastructure GitHub (« Deployment failed, try again later »).
+# Ce workflow retente donc le déploiement jusqu'à 3 fois avant d'abandonner,
+# ce qui absorbe ces aléas sans intervention manuelle.
+
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Un seul déploiement à la fois ; ne pas annuler celui en cours.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.d1.outputs.page_url || steps.d2.outputs.page_url || steps.d3.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prépare le contenu du site (exclut .git et .github)
+        run: |
+          mkdir _site
+          rsync -a --exclude='.git' --exclude='.github' --exclude='_site' ./ _site/
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      # ── Déploiement avec réessai (jusqu'à 3 tentatives) ──────────────────────
+      - name: Déploiement (essai 1)
+        id: d1
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      - name: Attente avant réessai
+        if: steps.d1.outcome == 'failure'
+        run: sleep 20
+
+      - name: Déploiement (essai 2)
+        id: d2
+        if: steps.d1.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      - name: Attente avant réessai
+        if: steps.d1.outcome == 'failure' && steps.d2.outcome == 'failure'
+        run: sleep 45
+
+      - name: Déploiement (essai 3, dernier)
+        id: d3
+        if: steps.d1.outcome == 'failure' && steps.d2.outcome == 'failure'
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,511 @@
+{
+  "formatVersion": 1,
+  "tdId": "r2.06-td5",
+  "tdLabel": "R2.06 - TD5",
+  "title": "Requêtes avec SQL",
+  "intro": "Formulez, en SQL, sur la base de données exemple, les requêtes d'interrogation suivantes.",
+  "database": {
+    "name": "gestion-pedagogique",
+    "schemaFile": "data/schema.sql",
+    "insertFile": "data/insert.sql"
+  },
+  "canon": {
+    "algo": "sha256",
+    "specVersion": 1
+  },
+  "sections": [
+    {
+      "name": "Expression des partitionnements",
+      "items": [
+        {
+          "type": "question",
+          "id": "q1",
+          "num": "1",
+          "statement": "Quel est, pour chacun des numéros et noms des professeurs, et pour chacune des années, le nombre d'étudiants auxquels il a enseigné ?",
+          "expectedCols": 4,
+          "expectedRows": 12,
+          "expectedLabel": "4 attributs, 12 tuples",
+          "orderSensitive": false,
+          "hashesSorted": [
+            "a6bbc33779eebf7e0282b5ea9f45295d43025389dc9654ff39261668cf9a7a7f"
+          ],
+          "hashOrdered": null,
+          "difficulty": 2,
+          "tags": [
+            "jointure",
+            "groupement",
+            "calcul-vertical",
+            "distinct"
+          ],
+          "sameAs": null
+        },
+        {
+          "type": "question",
+          "id": "q2",
+          "num": "2",
+          "statement": "Quel est, pour chacun des numéros et noms des professeurs responsable d'un module, le nombre de modules dans lesquels il fait cours ? Formulez les requêtes suivantes en utilisant, si possible, les trois formes de jointure.",
+          "expectedCols": 3,
+          "expectedRows": 5,
+          "expectedLabel": "3 attributs, 5 tuples",
+          "orderSensitive": false,
+          "hashesSorted": [
+            "e8644f929683a0292a330ed79125fdc7ccadf35e385b966262615adf38bdfc84"
+          ],
+          "hashOrdered": null,
+          "difficulty": 2,
+          "tags": [
+            "jointure",
+            "imbrication",
+            "semi-jointure",
+            "groupement",
+            "calcul-vertical",
+            "distinct"
+          ],
+          "sameAs": null
+        },
+        {
+          "type": "question",
+          "id": "q3",
+          "num": "3",
+          "statement": "Donnez la moyenne des moyennes de test par groupe d'étudiants de seconde année pour le module de libellé Conception de SI.",
+          "expectedCols": 2,
+          "expectedRows": 5,
+          "expectedLabel": "2 attributs, 5 tuples",
+          "orderSensitive": false,
+          "hashesSorted": [
+            "2c7977307a1ea546881e99aba4e6a534bdea1c1016262ca2990cde9fc6697829"
+          ],
+          "hashOrdered": null,
+          "difficulty": 2,
+          "tags": [
+            "jointure",
+            "groupement",
+            "calcul-vertical",
+            "sélection"
+          ],
+          "sameAs": null
+        }
+      ]
+    },
+    {
+      "name": "Calculs complexes",
+      "items": [
+        {
+          "type": "question",
+          "id": "q4",
+          "num": "4",
+          "statement": "Quels sont les numéros, noms et prénoms des enseignants ayant autant de modules que Bernard Faure ?",
+          "expectedCols": 3,
+          "expectedRows": 4,
+          "expectedLabel": "3 attributs, 4 tuples",
+          "orderSensitive": false,
+          "hashesSorted": [
+            "e0575b7bdbf1a7003d84a5418c55235eee27bd4837c2fcb0fe0e1059302e1336"
+          ],
+          "hashOrdered": null,
+          "difficulty": 3,
+          "tags": [
+            "jointure",
+            "groupement",
+            "calcul-vertical",
+            "imbrication",
+            "sous-requête",
+            "cte"
+          ],
+          "sameAs": null
+        },
+        {
+          "type": "question",
+          "id": "q5",
+          "num": "5",
+          "statement": "Donnez le nombre moyen d'étudiants des groupes de seconde année.",
+          "expectedCols": 1,
+          "expectedRows": 1,
+          "expectedLabel": "1 attribut, 1 tuple (9)",
+          "orderSensitive": false,
+          "hashesSorted": [
+            "2ef2e6e28e13aaa61a8cae6b6b7038d13699e8171671af9f5a4986f013631c61"
+          ],
+          "hashOrdered": null,
+          "difficulty": 2,
+          "tags": [
+            "groupement",
+            "calcul-vertical",
+            "sélection",
+            "sous-requête",
+            "cte"
+          ],
+          "sameAs": null
+        },
+        {
+          "type": "question",
+          "id": "q6",
+          "num": "6",
+          "statement": "Quel est le plus grand nombre d'étudiants à qui un professeur enseigne ?",
+          "expectedCols": 1,
+          "expectedRows": 1,
+          "expectedLabel": "1 attribut, 1 tuple (45)",
+          "orderSensitive": false,
+          "hashesSorted": [
+            "c0e764634a8f8ca3b10118e108ba657b25ea2baa7858b6a2715a313f60f5b643"
+          ],
+          "hashOrdered": null,
+          "difficulty": 2,
+          "tags": [
+            "groupement",
+            "calcul-vertical",
+            "sous-requête",
+            "distinct",
+            "cte"
+          ],
+          "sameAs": null
+        },
+        {
+          "type": "question",
+          "id": "q7",
+          "num": "7",
+          "statement": "Donnez les codes et libellés des modules, et lorsqu'il existe, le pourcentage de la somme d'heures de cours par rapport au total des heures de cours dans la discipline correspondante.",
+          "expectedCols": 3,
+          "expectedRows": 9,
+          "expectedLabel": "3 attributs, 9 tuples",
+          "orderSensitive": false,
+          "hashesSorted": [
+            "b7d1adc9b225a73473760e237910c6dd563c5d38402ec2b792e418f112e59764"
+          ],
+          "hashOrdered": null,
+          "difficulty": 3,
+          "tags": [
+            "jointure",
+            "groupement",
+            "calcul-vertical",
+            "sous-requête",
+            "null",
+            "cte"
+          ],
+          "sameAs": null
+        }
+      ]
+    },
+    {
+      "name": "Expression des recherches récursives",
+      "items": [
+        {
+          "type": "question",
+          "id": "q8",
+          "num": "8",
+          "statement": "Donnez, pour chaque code de module, le nombre de professeurs qui les enseignent et la moyenne de test maximale.",
+          "expectedCols": 3,
+          "expectedRows": 6,
+          "expectedLabel": "3 attributs, 6 tuples",
+          "orderSensitive": false,
+          "hashesSorted": [
+            "23ff18bcacf76786dffc361c653ed207b55708ee88400bee5407092c967cdf48"
+          ],
+          "hashOrdered": null,
+          "difficulty": 2,
+          "tags": [
+            "jointure",
+            "groupement",
+            "calcul-vertical",
+            "sous-requête",
+            "distinct",
+            "cte"
+          ],
+          "sameAs": null
+        },
+        {
+          "type": "question",
+          "id": "q9",
+          "num": "9",
+          "statement": "Quels sont les codes et libellés des racines des hiérarchies des modules ?",
+          "expectedCols": 2,
+          "expectedRows": 1,
+          "expectedLabel": "2 attributs, 1 tuple",
+          "orderSensitive": false,
+          "hashesSorted": [
+            "0c1662f2b0c7f8676d782b4df0744d8e96d9047d085eac27262a56241ee93a85"
+          ],
+          "hashOrdered": null,
+          "difficulty": 1,
+          "tags": [
+            "sélection",
+            "null",
+            "récursion"
+          ],
+          "sameAs": null
+        },
+        {
+          "type": "question",
+          "id": "q10",
+          "num": "10",
+          "statement": "Présenter, de manière hiérarchique, les libellés de tous les sous-modules du module Informatique 2de année.",
+          "expectedCols": null,
+          "expectedRows": null,
+          "expectedLabel": null,
+          "orderSensitive": false,
+          "hashesSorted": [],
+          "hashOrdered": null,
+          "difficulty": null,
+          "tags": [],
+          "sameAs": null,
+          "theoryNote": "Requête Oracle - non auto-évaluable en ligne (à exécuter sous Oracle)."
+        },
+        {
+          "type": "question",
+          "id": "q11",
+          "num": "11",
+          "statement": "Présenter, de manière hiérarchique, les libellés du module Outils modèles génie logiciel et de tous ses sous-modules.",
+          "expectedCols": null,
+          "expectedRows": null,
+          "expectedLabel": null,
+          "orderSensitive": false,
+          "hashesSorted": [],
+          "hashOrdered": null,
+          "difficulty": null,
+          "tags": [],
+          "sameAs": null,
+          "theoryNote": "Requête Oracle - non auto-évaluable en ligne (à exécuter sous Oracle)."
+        },
+        {
+          "type": "question",
+          "id": "q12",
+          "num": "12",
+          "statement": "Présenter, de manière hiérarchique, les libellés de tous les modules d'où est issu le module Bases de données.",
+          "expectedCols": null,
+          "expectedRows": null,
+          "expectedLabel": null,
+          "orderSensitive": false,
+          "hashesSorted": [],
+          "hashOrdered": null,
+          "difficulty": null,
+          "tags": [],
+          "sameAs": null,
+          "theoryNote": "Requête Oracle - non auto-évaluable en ligne (à exécuter sous Oracle)."
+        },
+        {
+          "type": "question",
+          "id": "q13",
+          "num": "13",
+          "statement": "Présenter, de manière hiérarchique, les libellés de tous les sous-modules de la discipline Informatique, subordonnés au module Informatique 2e année, à l'exception du module Bases de données.",
+          "expectedCols": null,
+          "expectedRows": null,
+          "expectedLabel": null,
+          "orderSensitive": false,
+          "hashesSorted": [],
+          "hashOrdered": null,
+          "difficulty": null,
+          "tags": [],
+          "sameAs": null,
+          "theoryNote": "Requête Oracle - non auto-évaluable en ligne (à exécuter sous Oracle)."
+        }
+      ]
+    },
+    {
+      "name": "Expression des divisions",
+      "items": [
+        {
+          "type": "instruction",
+          "text": "Quand cela possible, formulez les requêtes suivantes de deux manières différentes."
+        },
+        {
+          "type": "question",
+          "id": "q14",
+          "num": "14",
+          "statement": "Quels sont les noms et prénoms des professeurs ayant enseigné à tous les étudiants de seconde année ?",
+          "expectedCols": 2,
+          "expectedRows": 1,
+          "expectedLabel": "2 attributs, 1 tuple",
+          "orderSensitive": false,
+          "hashesSorted": [
+            "d274834cb6b661213530a85c7b63ae3166f952d8c9dff0c3f79e17af551ae0cf"
+          ],
+          "hashOrdered": null,
+          "difficulty": 3,
+          "tags": [
+            "division",
+            "not-exists",
+            "jointure",
+            "groupement",
+            "calcul-vertical"
+          ],
+          "sameAs": null
+        },
+        {
+          "type": "question",
+          "id": "q15",
+          "num": "15",
+          "statement": "Quels sont les noms et prénoms des étudiants dont tous les professeurs ont aussi donné cours à l'étudiant numéro 1102 ?",
+          "expectedCols": 2,
+          "expectedRows": 11,
+          "expectedLabel": "2 attributs, 11 tuples",
+          "orderSensitive": false,
+          "hashesSorted": [
+            "0b11eafaab555f0455ae00248c9772b4043d015f6c8749c489a3600ccc28a1dc"
+          ],
+          "hashOrdered": null,
+          "difficulty": 3,
+          "tags": [
+            "division",
+            "not-exists",
+            "jointure"
+          ],
+          "sameAs": null
+        },
+        {
+          "type": "question",
+          "id": "q16",
+          "num": "16",
+          "statement": "Quels sont les numéros, noms et prénoms des étudiants ayant eu, pour le module Conception de SI, tous les Professeurs enseignant ce module ?",
+          "expectedCols": 3,
+          "expectedRows": 3,
+          "expectedLabel": "3 attributs, 3 tuples",
+          "orderSensitive": false,
+          "hashesSorted": [
+            "776e2511ffe93d5cbeaa2d22fae2600f3d5859da8e1e9ea937803a3d42f33e47"
+          ],
+          "hashOrdered": null,
+          "difficulty": 3,
+          "tags": [
+            "division",
+            "not-exists",
+            "jointure",
+            "groupement",
+            "calcul-vertical",
+            "cte"
+          ],
+          "sameAs": null
+        },
+        {
+          "type": "question",
+          "id": "q17",
+          "num": "17",
+          "statement": "Quels sont les codes et libellés des modules suivis par tous les étudiants du groupe d'étudiants 2 de seconde année ?",
+          "expectedCols": 2,
+          "expectedRows": 1,
+          "expectedLabel": "2 attributs, 1 tuple",
+          "orderSensitive": false,
+          "hashesSorted": [
+            "8641729344a2acbcecae562dd0e5aaaccaff1ab6c1c5bc1e058866261b6086f1"
+          ],
+          "hashOrdered": null,
+          "difficulty": 3,
+          "tags": [
+            "division",
+            "not-exists",
+            "jointure",
+            "groupement",
+            "calcul-vertical"
+          ],
+          "sameAs": null
+        }
+      ]
+    },
+    {
+      "name": "Requêtes complexes",
+      "items": [
+        {
+          "type": "question",
+          "id": "q18",
+          "num": "18",
+          "statement": "Présenter, de manière hiérarchique, les libellés de tous les sous-modules de la discipline Informatique subordonnés au module Informatique 2de année à l'exception du module Codage et circuits et de tous ses éventuels sous-modules.",
+          "expectedCols": null,
+          "expectedRows": null,
+          "expectedLabel": null,
+          "orderSensitive": false,
+          "hashesSorted": [],
+          "hashOrdered": null,
+          "difficulty": null,
+          "tags": [],
+          "sameAs": null,
+          "theoryNote": "Requête Oracle - non auto-évaluable en ligne (à exécuter sous Oracle)."
+        },
+        {
+          "type": "question",
+          "id": "q19",
+          "num": "19",
+          "statement": "Présenter, de manière hiérarchique, les modules suivis par l'étudiant Jérôme Atlani ?",
+          "expectedCols": null,
+          "expectedRows": null,
+          "expectedLabel": null,
+          "orderSensitive": false,
+          "hashesSorted": [],
+          "hashOrdered": null,
+          "difficulty": null,
+          "tags": [],
+          "sameAs": null,
+          "theoryNote": "Requête Oracle - non auto-évaluable en ligne (à exécuter sous Oracle)."
+        },
+        {
+          "type": "question",
+          "id": "q20",
+          "num": "20",
+          "statement": "Quels sont les numéros, noms et prénoms des étudiants de seconde année dont toutes les moyennes de test sont supérieures ou égales à 10 ?",
+          "expectedCols": 3,
+          "expectedRows": 23,
+          "expectedLabel": "3 attributs, 23 tuples",
+          "orderSensitive": false,
+          "hashesSorted": [
+            "d49ad07f46c87b2b2c8819d3ce5544ee4ce878fff06122a97ff5b9e1e5324ecb"
+          ],
+          "hashOrdered": null,
+          "difficulty": 3,
+          "tags": [
+            "jointure",
+            "groupement",
+            "calcul-vertical",
+            "sélection"
+          ],
+          "sameAs": null
+        },
+        {
+          "type": "question",
+          "id": "q21",
+          "num": "21",
+          "statement": "Quels sont les numéros, noms et prénoms des étudiants ayant des moyennes dans un module subordonnés au module Principes des BD ?",
+          "expectedCols": 3,
+          "expectedRows": 19,
+          "expectedLabel": "3 attributs, 19 tuples",
+          "orderSensitive": false,
+          "hashesSorted": [
+            "2d61615b9b56ac5c7ebaacc6aa0d08f2abb134ffee153bc7eea7959d206e67d0"
+          ],
+          "hashOrdered": null,
+          "difficulty": 2,
+          "tags": [
+            "jointure",
+            "imbrication",
+            "semi-jointure",
+            "récursion",
+            "distinct",
+            "cte"
+          ],
+          "sameAs": null
+        },
+        {
+          "type": "question",
+          "id": "q22",
+          "num": "22",
+          "statement": "Donnez les numéros des étudiants, les écarts entre leurs éventuelles moyennes de test et la moins bonne moyenne de test du module ACSI ainsi que les écarts entre leurs éventuelles moyennes de test et la meilleure moyenne de test du module ACSI.",
+          "expectedCols": 3,
+          "expectedRows": 29,
+          "expectedLabel": "3 attributs, 29 tuples",
+          "orderSensitive": false,
+          "hashesSorted": [
+            "4915c31ab269f75a48e41917a58b001341c2aa8c6e2f4b570882f97831df444d"
+          ],
+          "hashOrdered": null,
+          "difficulty": 3,
+          "tags": [
+            "calcul-vertical",
+            "imbrication",
+            "sous-requête",
+            "sélection",
+            "cte"
+          ],
+          "sameAs": null
+        }
+      ]
+    }
+  ],
+  "subjectPdf": "sujet.pdf"
+}
