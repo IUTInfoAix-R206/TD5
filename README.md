@@ -5,7 +5,7 @@ TP de bases de données de l'IUT d'Aix-Marseille (ressource R2.06, Exploitation 
 - **[Faire le TP dans le navigateur](https://iutinfoaix-r206.github.io/TD5/)**
 - [Sujet PDF](sujet.pdf)
 
-Ce dépôt est généré automatiquement depuis le dépôt [Documents](https://github.com/IUTInfoAix-R105-R206/Documents) : toute modification manuelle sera écrasée à la prochaine publication.
+Ce dépôt est généré automatiquement : toute modification manuelle sera écrasée à la prochaine publication.
 
 ## Utilisation
 
