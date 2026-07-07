@@ -36,6 +36,16 @@ function debounce(fn, ms) {
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 }
 
+// Affichage uniforme en MAJUSCULES (les valeurs de la base et la complétion le sont déjà).
+// upcaseHtml : met le texte visible en capitales sans toucher aux balises ni aux entités.
+function upcaseHtml(html) {
+  return html.replace(/(<[^>]*>|&[a-zA-Z#0-9]+;)|([^<&]+)/g, (m, tag, txt) => tag || txt.toUpperCase());
+}
+// upcaseSql : met le DDL en capitales en laissant les lignes de commentaire (--) intactes.
+function upcaseSql(text) {
+  return text.split("\n").map((l) => (l.trimStart().startsWith("--") ? l : l.toUpperCase())).join("\n");
+}
+
 // ── Rendu de l'en-tête ──────────────────────────────────────────────────────
 
 function renderHeader(root) {
@@ -98,7 +108,7 @@ async function renderSchemaPanel(root) {
     const details = el("details", { class: "schema-panel", attrs: { open: "" } });
     details.appendChild(el("summary", { text: "Schéma relationnel" }));
     const box = el("div", { class: "schema-rel" });
-    for (const line of rel) box.appendChild(el("div", { class: "schema-rel-line", html: line }));
+    for (const line of rel) box.appendChild(el("div", { class: "schema-rel-line", html: upcaseHtml(line) }));
     details.appendChild(box);
     root.appendChild(details);
     return;
@@ -110,7 +120,7 @@ async function renderSchemaPanel(root) {
   root.appendChild(details);
   try {
     const text = await fetch(questions.database.schemaFile).then((r) => r.text());
-    pre.textContent = text.trim();
+    pre.textContent = upcaseSql(text.trim());
   } catch {
     pre.textContent = "(schéma indisponible)";
   }
@@ -230,7 +240,7 @@ function renderTable(result) {
   const { cols, rows } = result;
   const table = el("table", { class: "result-table" });
   const thead = el("thead");
-  thead.appendChild(el("tr", {}, cols.map((c) => el("th", { text: c }))));
+  thead.appendChild(el("tr", {}, cols.map((c) => el("th", { text: String(c).toUpperCase() }))));
   table.appendChild(thead);
 
   const tbody = el("tbody");
