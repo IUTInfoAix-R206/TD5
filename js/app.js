@@ -1,10 +1,11 @@
 // app.js - interface du TP SQL en ligne.
 
-import { initEngine, runQuery } from "./engine.js";
+import { initEngine, runQuery, getSchema } from "./engine.js";
 import { hashResult } from "./canon.js";
 import { makeStore, buildExport, downloadText, exportFilename } from "./store.js";
 import { highlightSQL, highlightAlgebra } from "./highlight.js";
 import { compileAlgebra, AlgebraError } from "./algebra.js";
+import { attachAutocomplete } from "./autocomplete.js";
 
 const MAX_DISPLAY_ROWS = 50;
 
@@ -382,7 +383,21 @@ function renderQuestion(container, question) {
     highlightPre.scrollTop = textarea.scrollTop;
     highlightPre.scrollLeft = textarea.scrollLeft;
   });
+
+  // Autocomplétion contextuelle : tables/colonnes du schéma + mots-clés (SQL) ou
+  // opérateurs/relations/attributs (algèbre). Déclenchée à la frappe et par Ctrl/Cmd+Espace.
+  const ac = attachAutocomplete(textarea, {
+    getMode: () => mode,
+    getSchema,
+    onInsert: () => {
+      state.answers[question.id] = textarea.value;
+      syncHighlight();
+      saveDebounced();
+    },
+  });
+
   textarea.addEventListener("keydown", (e) => {
+    if (ac.handleKeydown(e)) return; // la popup d'autocomplétion a consommé la touche
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
       run();

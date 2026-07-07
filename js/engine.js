@@ -13,6 +13,7 @@ import { rewriteQuantifiers } from "./sql-quantifiers.js";
 
 let SQL = null;
 let snapshot = null;
+let schemaCache = null;
 
 // Fonctions SQL personnalisées, réenregistrées sur chaque base fraîche.
 // TO_DATE : les dates du jeu de données sont déjà au format ISO, la fonction est
@@ -34,6 +35,7 @@ export async function initEngine(schemaUrl, insertUrl) {
   db.run(schema);
   if (insert.trim()) db.run(insert);
   snapshot = db.export();
+  schemaCache = null;
   db.close();
 }
 
@@ -59,6 +61,43 @@ export function runQuery(sql) {
     return { cols, rows };
   } catch (e) {
     return { error: String(e.message || e) };
+  } finally {
+    db.close();
+  }
+}
+
+// Schéma de la base, pour l'autocomplétion : { tables:[...], columns:{table:[...]},
+// allColumns:[...] } (noms d'origine, casse préservée). Mis en cache.
+export function getSchema() {
+  if (schemaCache) return schemaCache;
+  const empty = { tables: [], columns: {}, allColumns: [] };
+  if (!SQL || !snapshot) return empty;
+  const db = new SQL.Database(snapshot);
+  try {
+    const tables = [];
+    const columns = {};
+    const res = db.exec(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
+    if (res.length) {
+      for (const row of res[0].values) {
+        const t = row[0];
+        tables.push(t);
+        const info = db.exec(`PRAGMA table_info("${String(t).replace(/"/g, '""')}")`);
+        columns[t] = info.length ? info[0].values.map((r) => r[1]) : []; // r[1] = name
+      }
+    }
+    const seen = new Set();
+    const allColumns = [];
+    for (const t of tables) {
+      for (const c of columns[t]) {
+        const k = c.toLowerCase();
+        if (!seen.has(k)) { seen.add(k); allColumns.push(c); }
+      }
+    }
+    schemaCache = { tables, columns, allColumns };
+    return schemaCache;
+  } catch {
+    return empty;
   } finally {
     db.close();
   }
