@@ -70,7 +70,7 @@ const ALGEBRA_RE = new RegExp(
   "(--[^\\n]*)" +                          // 1 commentaire
   "|('(?:[^'\\n])*')" +                    // 2 chaîne
   "|(:=|->)" +                             // 3 affectation / flèche
-  "|(<=|>=|<>|=|<|>)" +                    // 4 comparateur
+  "|(<=|>=|<>|!=|=|<|>)" +                 // 4 comparateur
   "|(\\b\\d{1,2}:\\d{2}\\b)" +             // 5 temps HH:MM
   "|(\\b\\d+(?:\\.\\d+)?\\b)" +            // 6 nombre
   "|([A-Za-z_\\u00C0-\\u024F][A-Za-z0-9_\\u00C0-\\u024F.]*)" + // 7 mot (mot-clé / relation / attribut)
@@ -94,7 +94,9 @@ export function highlightAlgebra(code) {
     else if (m[6] !== undefined) out += `<span class="tok-number">${escapeHtml(m[6])}</span>`;
     else if (m[7] !== undefined) {
       const w = m[7];
-      if (ALGEBRA_KEYWORDS.has(w)) out += `<span class="tok-keyword">${escapeHtml(w)}</span>`;
+      // Mot-clé en MAJUSCULES, accentué ou non (SÉLECTION, DIFFÉRENCE).
+      const kw = w === w.toUpperCase() && ALGEBRA_KEYWORDS.has(w.normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
+      if (kw) out += `<span class="tok-keyword">${escapeHtml(w)}</span>`;
       else out += escapeHtml(w);
     } else if (m[8] !== undefined) out += `<span class="tok-punct">${escapeHtml(m[8])}</span>`;
     else out += m[9]; // espaces

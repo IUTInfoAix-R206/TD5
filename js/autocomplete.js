@@ -5,7 +5,8 @@
 //   - SQL : après FROM/JOIN -> tables ; « alias. » ou « table. » -> colonnes de cette table ;
 //           ailleurs -> colonnes puis tables puis mots-clés.
 //   - Algèbre : après « / » -> attributs (+ ET/OU/NON) ; après « ( » ou « , » -> relations ;
-//               début d'expression / après « := » -> opérateurs.
+//               début d'expression / après « := » ou « = » d'affectation -> opérateurs.
+//   Le filtrage par préfixe ignore casse et accents (« sel » propose SÉLECTION).
 //
 // La logique de suggestion (suggest, buildAliasMap) est PURE (pas de DOM) et testée par
 // scripts/test-autocomplete.mjs. Le reste (popup, position du curseur) est du DOM.
@@ -38,10 +39,16 @@ const SQL_FUNCS_SET = new Set(SQL_FUNCTIONS);
 // Opérateurs relationnels seulement (proposés en début d'expression). Les connecteurs
 // ET/OU/NON ne sont PAS complétés : ils ne peuvent pas ouvrir une condition (on commence
 // par un attribut) et sont assez courts pour être tapés à la main.
+// Graphie française (accentuée), acceptée par le compilateur comme la forme sans accent.
 const ALGEBRA_OPERATORS = [
-  "SELECTION", "PROJECTION", "RENOMMAGE", "UNION", "INTERSECTION", "DIFFERENCE",
+  "SÉLECTION", "PROJECTION", "RENOMMAGE", "UNION", "INTERSECTION", "DIFFÉRENCE",
   "JOINTURE", "JOINTURE_NATURELLE", "DIVISION",
 ];
+// Minuscules sans accent : comparaison insensible à la casse et aux accents.
+const fold = (s) => String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const OP_WORD = "[A-Za-z_\\u00C0-\\u024F]+";
+// Ligne d'affectation dont l'expression n'est pas commencée : « R1 := » ou « R1 = ».
+const ASSIGN_START = /^\s*[A-Za-z_\u00C0-\u024F][\w.\u00C0-\u024F]*\s*:?=\s*$/;
 
 const IDENT = "[A-Za-z_\\u00C0-\\u024F][A-Za-z0-9_\\u00C0-\\u024F]*";
 const TRAILING_WORD = new RegExp(IDENT + "$");
@@ -219,7 +226,7 @@ function algebraCandidates(textBefore, start, schema) {
   const ops = ALGEBRA_OPERATORS.map((x) => ({ label: x, kind: "kw" }));
   const before = textBefore.slice(0, start);
   const trimmed = before.replace(/\s+$/, "");
-  if (trimmed === "" || trimmed.endsWith(":=")) return ops;
+  if (trimmed === "" || ASSIGN_START.test(before.slice(before.lastIndexOf("\n") + 1))) return ops;
   let j = start - 1;
   while (j >= 0 && /\s/.test(textBefore[j])) j--;
   const prev = j >= 0 ? textBefore[j] : "";
@@ -250,14 +257,14 @@ function enclosingOperator(before) {
   if (openIdx < 0) return null;
   let j = openIdx - 1;
   while (j >= 0 && /\s/.test(before[j])) j--;
-  const m = /[A-Za-z_]+$/.exec(before.slice(0, j + 1));
+  const m = new RegExp(OP_WORD + "$").exec(before.slice(0, j + 1));
   let commas = 0, d = 0;
   for (let i = openIdx + 1; i < before.length; i++) {
     if (before[i] === "(") d++;
     else if (before[i] === ")") d--;
     else if (before[i] === "," && d === 0) commas++;
   }
-  return { op: m ? m[0].toUpperCase() : null, commas, openIdx };
+  return { op: m ? fold(m[0]).toUpperCase() : null, commas, openIdx };
 }
 
 // ── Suivi du schéma des relations (pour proposer les attributs du bon opérande) ──
@@ -301,12 +308,12 @@ function relationSchema(name, rels, baseSchema) {
 
 // Schéma résultant d'une expression algébrique (approché, pour l'autocomplétion).
 function exprSchema(expr, rels, baseSchema) {
-  const m = /^\s*([A-Za-z_]+)\s*\(([\s\S]*)\)\s*$/.exec(expr);
+  const m = new RegExp("^\\s*(" + OP_WORD + ")\\s*\\(([\\s\\S]*)\\)\\s*$").exec(expr);
   if (!m) {
     const nm = /^\s*([A-Za-z_][\w.'-]*)\s*$/.exec(expr);
     return nm ? relationSchema(nm[1], rels, baseSchema) : null;
   }
-  const op = m[1].toUpperCase();
+  const op = fold(m[1]).toUpperCase();
   const inner = m[2];
   const slash = topLevelIndex(inner, "/");
   const operandsPart = slash >= 0 ? inner.slice(0, slash) : inner;
@@ -318,7 +325,7 @@ function exprSchema(expr, rels, baseSchema) {
   if (op === "RENOMMAGE") {
     const renames = {};
     for (const pair of splitTopLevel(rest, ",")) {
-      const pm = /([A-Za-z_]\w*)\s*->\s*([A-Za-z_]\w*)/.exec(pair);
+      const pm = new RegExp("(" + IDENT + ")\\s*->\\s*(" + IDENT + ")").exec(pair);
       if (pm) renames[pm[1].toLowerCase()] = pm[2];
     }
     return sch(operands[0]).map((c) => renames[c.toLowerCase()] || c);
@@ -342,7 +349,7 @@ function definedRelations(textBefore, baseSchema) {
   const schemas = {}, names = [];
   const lines = textBefore.split("\n");
   for (let i = 0; i < lines.length - 1; i++) { // sauf la ligne en cours de frappe
-    const am = /^\s*([A-Za-z_][\w.'-]*)\s*:=\s*([\s\S]+)$/.exec(lines[i]);
+    const am = /^\s*([A-Za-z_\u00C0-\u024F][\w.'\u00C0-\u024F-]*)\s*:?=\s*([\s\S]+)$/.exec(lines[i]);
     if (!am) continue;
     const sch = exprSchema(am[2], schemas, baseSchema);
     if (sch) schemas[am[1].toLowerCase()] = sch;
@@ -448,11 +455,11 @@ export function suggest(mode, textBefore, schema, force = false, fullText = null
   const raw = mode === "algebra"
     ? algebraCandidates(textBefore, start, schema)
     : sqlCandidates(textBefore, start, qualifier, schema, fullText);
-  const w = word.toLowerCase();
+  const w = fold(word);
   const seen = new Set();
   const items = [];
   for (const it of raw) {
-    const low = it.label.toLowerCase();
+    const low = fold(it.label);
     if (!low.startsWith(w)) continue;
     if (low === w && !qualifier) continue; // mot déjà tapé en entier : rien à proposer
     if (seen.has(low)) continue;

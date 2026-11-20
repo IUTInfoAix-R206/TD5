@@ -1,12 +1,12 @@
 // algebra.js - compilateur d'algèbre relationnelle (notation du cours) vers SQL SQLite.
 //
 // Notation de référence (STRICTE - voir docs/algebre-syntaxe.md) :
-//   - une affectation par ligne : `Rnom := EXPR`
-//   - opérateurs en MAJUSCULES sans accent : SELECTION, PROJECTION, RENOMMAGE,
-//     UNION, INTERSECTION, DIFFERENCE, JOINTURE, DIVISION
+//   - une affectation par ligne : `Rnom := EXPR` (ou `Rnom = EXPR`)
+//   - opérateurs en MAJUSCULES, avec ou sans accent : SELECTION (SÉLECTION), PROJECTION,
+//     RENOMMAGE, UNION, INTERSECTION, DIFFERENCE (DIFFÉRENCE), JOINTURE, DIVISION
 //   - renommage : RENOMMAGE (R / ancien -> nouveau, ...)
 //   - connecteurs booléens : ET / OU / NON (+ parenthèses)
-//   - comparaisons : = <> < > <= >= ; chaînes '...' ; nombres ; temps HH:MM (non quoté) ;
+//   - comparaisons : = <> != < > <= >= ; chaînes '...' ; nombres ; temps HH:MM (non quoté) ;
 //     ou un autre attribut de la relation (SELECTION (R / adresse = villeDep))
 //   - commentaires : -- jusqu'en fin de ligne ; la dernière relation affectée = réponse
 //
@@ -27,12 +27,22 @@ const OPERATORS = new Set([
 ]);
 const BOOLEANS = new Set(["ET", "OU", "NON"]);
 const KEYWORDS = new Set([...OPERATORS, ...BOOLEANS]);
+// Graphie française (accentuée) des opérateurs : acceptée au même titre que la forme
+// sans accent, et proposée dans les messages d'aide.
+const FRENCH_SPELLING = { SELECTION: "SÉLECTION", DIFFERENCE: "DIFFÉRENCE" };
+export function frenchSpelling(op) { return FRENCH_SPELLING[op] || op; }
 
 function stripDiacritics(s) {
   return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 function norm(s) {
   return stripDiacritics(s).toLowerCase();
+}
+// Mot-clé écrit en MAJUSCULES, accentué ou non (SÉLECTION -> SELECTION) ; null sinon.
+export function keywordOf(word) {
+  if (word !== word.toUpperCase()) return null;
+  const k = stripDiacritics(word);
+  return KEYWORDS.has(k) ? k : null;
 }
 
 // ── Tokenizer ────────────────────────────────────────────────────────────────
@@ -41,6 +51,7 @@ const IDENT_START = /[A-Za-z_\u00C0-\u024F]/;
 const IDENT_CHAR = /[A-Za-z0-9_\u00C0-\u024F]/;
 
 function tokenize(src) {
+  src = src.normalize("NFC"); // accents saisis en forme décomposée (e + ◌́) -> é
   const toks = [];
   let i = 0, line = 1, col = 1;
   const n = src.length;
@@ -61,6 +72,7 @@ function tokenize(src) {
     if (c === "<" && src[i + 1] === "=") { push("CMP", "<="); adv(2); continue; }
     if (c === ">" && src[i + 1] === "=") { push("CMP", ">="); adv(2); continue; }
     if (c === "<" && src[i + 1] === ">") { push("CMP", "<>"); adv(2); continue; }
+    if (c === "!" && src[i + 1] === "=") { push("CMP", "<>"); adv(2); continue; } // != (synonyme de <>)
     if (c === "=" || c === "<" || c === ">") { push("CMP", c); adv(); continue; }
     // Ponctuation
     if (c === "(") { push("LPAREN", "("); adv(); continue; }
@@ -90,7 +102,8 @@ function tokenize(src) {
     if (IDENT_START.test(c)) {
       let s = c; adv();
       while (i < n && (IDENT_CHAR.test(src[i]) || (src[i] === "." && IDENT_CHAR.test(src[i + 1] || "")))) { s += src[i]; adv(); }
-      if (KEYWORDS.has(s)) push("KW", s);
+      const kw = keywordOf(s);
+      if (kw) push("KW", kw);
       else toks.push({ type: "IDENT", value: s, line });
       continue;
     }
@@ -134,8 +147,9 @@ function parse(toks) {
     if (t.type === "IDENT") {
       const up = stripDiacritics(t.value).toUpperCase();
       if (OPERATORS.has(up)) {
+        const fr = frenchSpelling(up);
         return new AlgebraError(
-          `opérateur « ${t.value} » : écrivez-le en majuscules sans accent : ${up}`, t.line);
+          `opérateur « ${t.value} » : écrivez-le en majuscules : ${fr}${fr !== up ? ` (ou ${up})` : ""}`, t.line);
       }
       return new AlgebraError(`opérateur inconnu « ${t.value} »`, t.line);
     }
@@ -147,7 +161,7 @@ function parse(toks) {
   function parseComparison() {
     const attr = attrName();
     const t = peek();
-    if (t.type !== "CMP") throw new AlgebraError("comparateur attendu (= <> < > <= >=)", t.line);
+    if (t.type !== "CMP") throw new AlgebraError("comparateur attendu (= <> != < > <= >=)", t.line);
     const op = next().value;
     const ot = peek();
     if (ot.type === "STRING") { next(); return { c: "cmp", attr, op, operand: operand("str", ot.value) }; }
@@ -260,8 +274,9 @@ function parse(toks) {
     const line = peek().line;
     if (peek().type !== "IDENT") throw new AlgebraError("nom de relation attendu en début d'affectation", line);
     const name = next().value;
-    if (at("CMP") && peek().value === "=") throw new AlgebraError("utilisez « := » pour l'affectation (et non « = »)", peek().line);
-    expect("ASSIGN", "« := » attendu après le nom de la relation");
+    // Affectation : « := » ou « = » (pas d'ambiguïté en début de ligne).
+    if (at("CMP") && peek().value === "=") next();
+    else expect("ASSIGN", "« := » (ou « = ») attendu après le nom de la relation");
     const expr = parseExpr(line);
     if (!at("NEWLINE") && !at("EOF")) throw new AlgebraError("fin de ligne attendue (une seule affectation par ligne)", peek().line);
     assignments.push({ name, expr, line });
