@@ -140,7 +140,7 @@ R2 := PROJECTION (R1 / numAv, nomAv)</pre>
     <table class="syntax-table"><thead><tr><th>Opérateur</th><th>Forme</th></tr></thead><tbody>
       <tr><td>SÉLECTION</td><td>SÉLECTION (R / <em>condition</em>)</td></tr>
       <tr><td>PROJECTION</td><td>PROJECTION (R / attr1, attr2, …)</td></tr>
-      <tr><td>RENOMMAGE</td><td>RENOMMAGE (R / ancien -&gt; nouveau, …)</td></tr>
+      <tr><td>RENOMMAGE</td><td>RENOMMAGE (R / ancien -&gt; nouveau, …) (ou →)</td></tr>
       <tr><td>UNION · INTERSECTION · DIFFÉRENCE</td><td>UNION (R1, R2)</td></tr>
       <tr><td>JOINTURE</td><td>JOINTURE (R1, R2 / attrG <em>op</em> attrD)</td></tr>
       <tr><td>JOINTURE_NATURELLE</td><td>JOINTURE_NATURELLE (R1, R2)</td></tr>
@@ -151,7 +151,8 @@ R2 := PROJECTION (R1 / numAv, nomAv)</pre>
       <code>&lt;=</code> <code>&gt;=</code> ; connecteurs <code>ET</code> / <code>OU</code> / <code>NON</code> ;
       chaînes entre apostrophes <code>'TEXTE'</code> ; heures <code>HH:MM</code> ;
       comparaison entre deux attributs (<code>adresse = villeDep</code>) ;
-      commentaire <code>--</code> en fin de ligne. Opérateurs en <strong>MAJUSCULES</strong>, avec ou sans accent
+      commentaire <code>--</code> en fin de ligne ; noms de relations du type
+      <code>R1</code>, <code>R2.1</code>, <code>R'4.1</code>, chacun affecté une seule fois. Opérateurs en <strong>MAJUSCULES</strong>, avec ou sans accent
       (<code>SÉLECTION</code> ou <code>SELECTION</code>).
     </p>`;
   details.appendChild(body);

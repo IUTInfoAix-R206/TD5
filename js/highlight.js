@@ -69,11 +69,11 @@ const ALGEBRA_KEYWORDS = new Set([
 const ALGEBRA_RE = new RegExp(
   "(--[^\\n]*)" +                          // 1 commentaire
   "|('(?:[^'\\n])*')" +                    // 2 chaîne
-  "|(:=|->)" +                             // 3 affectation / flèche
+  "|(:=|->|→)" +                           // 3 affectation / flèche
   "|(<=|>=|<>|!=|=|<|>)" +                 // 4 comparateur
   "|(\\b\\d{1,2}:\\d{2}\\b)" +             // 5 temps HH:MM
   "|(\\b\\d+(?:\\.\\d+)?\\b)" +            // 6 nombre
-  "|([A-Za-z_\\u00C0-\\u024F][A-Za-z0-9_\\u00C0-\\u024F.]*)" + // 7 mot (mot-clé / relation / attribut)
+  "|([A-Za-z_\\u00C0-\\u024F][A-Za-z0-9_\\u00C0-\\u024F.']*)" + // 7 mot (mot-clé / relation / attribut, primes R'4.1)
   "|([(),/])" +                            // 8 ponctuation
   "|(\\s+)",                               // 9 espaces
   "g"

@@ -4,7 +4,8 @@
 //   - une affectation par ligne : `Rnom := EXPR` (ou `Rnom = EXPR`)
 //   - opérateurs en MAJUSCULES, avec ou sans accent : SELECTION (SÉLECTION), PROJECTION,
 //     RENOMMAGE, UNION, INTERSECTION, DIFFERENCE (DIFFÉRENCE), JOINTURE, DIVISION
-//   - renommage : RENOMMAGE (R / ancien -> nouveau, ...)
+//   - renommage : RENOMMAGE (R / ancien -> nouveau, ...) (flèche -> ou →)
+//   - noms de relations : R1, R2.1, avec primes R'4.1, R''6.1 ; chacun affecté une seule fois
 //   - connecteurs booléens : ET / OU / NON (+ parenthèses)
 //   - comparaisons : = <> != < > <= >= ; chaînes '...' ; nombres ; temps HH:MM (non quoté) ;
 //     ou un autre attribut de la relation (SELECTION (R / adresse = villeDep))
@@ -68,6 +69,7 @@ function tokenize(src) {
     if (c === ":" && src[i + 1] === "=") { push("ASSIGN", ":="); adv(2); continue; }
     // Flèche ->
     if (c === "-" && src[i + 1] === ">") { push("ARROW", "->"); adv(2); continue; }
+    if (c === "→") { push("ARROW", "->"); adv(); continue; } // flèche Unicode des documents Word
     // Comparateurs
     if (c === "<" && src[i + 1] === "=") { push("CMP", "<="); adv(2); continue; }
     if (c === ">" && src[i + 1] === "=") { push("CMP", ">="); adv(2); continue; }
@@ -98,10 +100,13 @@ function tokenize(src) {
       const m = /^[0-9]+(\.[0-9]+)?/.exec(src.slice(i));
       push("NUMBER", m[0]); adv(m[0].length); continue;
     }
-    // Identifiant / mot-clé (les noms de relations peuvent contenir des points internes)
+    // Identifiant / mot-clé. Les noms de relations peuvent contenir des points internes
+    // (R2.1) et des primes (R'4.1, R''6.1) : une apostrophe COLLÉE à un identifiant est un
+    // prime, jamais le début d'une chaîne (une chaîne suit un comparateur ou un espace).
     if (IDENT_START.test(c)) {
       let s = c; adv();
-      while (i < n && (IDENT_CHAR.test(src[i]) || (src[i] === "." && IDENT_CHAR.test(src[i + 1] || "")))) { s += src[i]; adv(); }
+      while (i < n && (IDENT_CHAR.test(src[i]) || src[i] === "'" ||
+                       (src[i] === "." && IDENT_CHAR.test(src[i + 1] || "")))) { s += src[i]; adv(); }
       const kw = keywordOf(s);
       if (kw) push("KW", kw);
       else toks.push({ type: "IDENT", value: s, line });
@@ -269,11 +274,17 @@ function parse(toks) {
   }
 
   const assignments = [];
+  const definedAt = new Map(); // nom normalisé -> ligne de sa première affectation
   skipNewlines();
   while (!at("EOF")) {
     const line = peek().line;
     if (peek().type !== "IDENT") throw new AlgebraError("nom de relation attendu en début d'affectation", line);
     const name = next().value;
+    const key = norm(name);
+    if (definedAt.has(key)) {
+      throw new AlgebraError(`relation « ${name} » déjà définie ligne ${definedAt.get(key)} : donnez un nouveau nom à chaque relation`, line);
+    }
+    definedAt.set(key, line);
     // Affectation : « := » ou « = » (pas d'ambiguïté en début de ligne).
     if (at("CMP") && peek().value === "=") next();
     else expect("ASSIGN", "« := » (ou « = ») attendu après le nom de la relation");

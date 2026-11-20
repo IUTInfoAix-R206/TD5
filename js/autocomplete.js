@@ -46,12 +46,30 @@ const ALGEBRA_OPERATORS = [
   "JOINTURE", "JOINTURE_NATURELLE", "DIVISION",
 ];
 // Minuscules sans accent : comparaison insensible à la casse et aux accents.
-const fold = (s) => String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const fold = (s) => unmaskPrimes(String(s)).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+// Primes des noms de relations (R'4.1, R''6.1) : une apostrophe COLLÉE à un identifiant
+// n'ouvre pas de chaîne. On la masque par ′ (U+2032, même longueur) à l'entrée de la
+// logique d'algèbre, pour que les détecteurs de chaînes l'ignorent ; on la rétablit dans
+// les libellés proposés.
+const PRIME = "\u2032";
+function maskPrimes(text) {
+  let out = "", inStr = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === "'") {
+      if (!inStr && /[A-Za-z0-9_.\u00C0-\u024F\u2032]/.test(out[i - 1] || "")) { out += PRIME; continue; }
+      inStr = !inStr;
+    }
+    out += c;
+  }
+  return out;
+}
+function unmaskPrimes(text) { return text.replace(/\u2032/g, "'"); }
 const OP_WORD = "[A-Za-z_\\u00C0-\\u024F]+";
 // Ligne d'affectation dont l'expression n'est pas commencée : « R1 := » ou « R1 = ».
-const ASSIGN_START = /^\s*[A-Za-z_\u00C0-\u024F][\w.\u00C0-\u024F]*\s*:?=\s*$/;
+const ASSIGN_START = /^\s*[A-Za-z_\u00C0-\u024F][\w.\u00C0-\u024F\u2032]*\s*:?=\s*$/;
 
-const IDENT = "[A-Za-z_\\u00C0-\\u024F][A-Za-z0-9_\\u00C0-\\u024F]*";
+const IDENT = "[A-Za-z_\\u00C0-\\u024F][A-Za-z0-9_\\u00C0-\\u024F\\u2032]*"; // ′ : prime masqué (algèbre)
 const TRAILING_WORD = new RegExp(IDENT + "$");
 // Démarreurs de CLAUSE uniquement (pas les opérateurs AND/OR/IN/LIKE...) : lastClauseKeyword
 // doit donner la clause qui gouverne le curseur (WHERE...), pas le dernier opérateur tapé.
@@ -229,7 +247,7 @@ function algebraCandidates(textBefore, start, schema) {
     case "expr": return kw(ALGEBRA_OPERATORS);
     case "relation": {
       // Opérande : relation de base OU relation intermédiaire (Rn) déjà définie.
-      const rels = definedRelations(before, schema).names.map((n) => ({ label: n.toUpperCase(), kind: "rel" }));
+      const rels = definedRelations(before, schema).names.map((n) => ({ label: unmaskPrimes(n).toUpperCase(), kind: "rel" }));
       return [...upTables(schema), ...rels];
     }
     case "attribute": return upCols(ctx.attrs);
@@ -239,7 +257,7 @@ function algebraCandidates(textBefore, start, schema) {
 }
 
 // Jetons d'un fragment d'algèbre (chaînes, heures, nombres, mots, symboles).
-const ALG_TOKEN = /'[^']*'|\d{1,2}:\d{2}|\d+(?:\.\d+)?|[A-Za-z_À-ɏ][\w.À-ɏ]*|->|<=|>=|<>|!=|=|<|>|\S/g;
+const ALG_TOKEN = /'[^']*'|\d{1,2}:\d{2}|\d+(?:\.\d+)?|[A-Za-z_\u00C0-\u024F][\w.\u00C0-\u024F\u2032]*|->|→|<=|>=|<>|!=|=|<|>|\S/g;
 const isCmp = (t) => /^(<=|>=|<>|!=|=|<|>)$/.test(t || "");
 const isWord = (t) => /^[A-Za-z_À-ɏ]/.test(t || "");
 const BOOL_KW = new Set(["ET", "OU", "NON"]);
@@ -283,6 +301,7 @@ function enclosingOperator(before) {
 //   { zone: "connector", connectors} après une comparaison complète : ET / OU ;
 //   { zone: "none" }                 saisie libre (nouveau nom, comparateur attendu…).
 export function algebraContext(before, baseSchema) {
+  before = maskPrimes(before);
   const line = before.slice(before.lastIndexOf("\n") + 1);
   if (/^\s*$/.test(line)) return { zone: "name" };
   if (ASSIGN_START.test(line)) return { zone: "expr" };
@@ -367,7 +386,7 @@ function relationSchema(name, rels, baseSchema) {
 function exprSchema(expr, rels, baseSchema) {
   const m = new RegExp("^\\s*(" + OP_WORD + ")\\s*\\(([\\s\\S]*)\\)\\s*$").exec(expr);
   if (!m) {
-    const nm = /^\s*([A-Za-z_][\w.'-]*)\s*$/.exec(expr);
+    const nm = /^\s*([A-Za-z_\u00C0-\u024F][\w.'\u00C0-\u024F\u2032-]*)\s*$/.exec(expr);
     return nm ? relationSchema(nm[1], rels, baseSchema) : null;
   }
   const op = fold(m[1]).toUpperCase();
@@ -382,7 +401,7 @@ function exprSchema(expr, rels, baseSchema) {
   if (op === "RENOMMAGE") {
     const renames = {};
     for (const pair of splitTopLevel(rest, ",")) {
-      const pm = new RegExp("(" + IDENT + ")\\s*->\\s*(" + IDENT + ")").exec(pair);
+      const pm = new RegExp("(" + IDENT + ")\\s*(?:->|→)\\s*(" + IDENT + ")").exec(pair);
       if (pm) renames[pm[1].toLowerCase()] = pm[2];
     }
     return sch(operands[0]).map((c) => renames[c.toLowerCase()] || c);
@@ -406,7 +425,7 @@ function definedRelations(textBefore, baseSchema) {
   const schemas = {}, names = [];
   const lines = textBefore.split("\n");
   for (let i = 0; i < lines.length - 1; i++) { // sauf la ligne en cours de frappe
-    const am = /^\s*([A-Za-z_\u00C0-\u024F][\w.'\u00C0-\u024F-]*)\s*:?=\s*([\s\S]+)$/.exec(lines[i]);
+    const am = /^\s*([A-Za-z_\u00C0-\u024F][\w.'\u00C0-\u024F\u2032-]*)\s*:?=\s*([\s\S]+)$/.exec(lines[i]);
     if (!am) continue;
     const sch = exprSchema(am[2], schemas, baseSchema);
     if (sch) schemas[am[1].toLowerCase()] = sch;
@@ -418,6 +437,7 @@ function definedRelations(textBefore, baseSchema) {
 // Attributs disponibles à l'endroit du curseur (après « / »), = schéma du/des opérande(s)
 // de l'opérateur courant. null si indéterminé (→ repli sur toutes les colonnes).
 export function contextAttributes(textBefore, baseSchema) {
+  textBefore = maskPrimes(textBefore);
   const info = enclosingOperator(textBefore);
   if (!info) return null;
   return operandAttributes(textBefore, { ...info, slash: info.slash >= 0 ? info.slash : textBefore.length }, baseSchema);
@@ -430,6 +450,7 @@ const AL_BINARY = ["UNION", "INTERSECTION", "DIFFERENCE", "JOINTURE", "JOINTURE_
 //   relation d'un opérateur unaire -> « / » ; 1re relation d'un binaire -> « , » ;
 //   2e relation d'une JOINTURE -> « / » ; attribut (ancien nom) dans RENOMMAGE -> « -> ».
 export function algebraAcceptSuffix(before, kind) {
+  before = maskPrimes(before);
   const info = enclosingOperator(before);
   if (!info || !info.op) return "";
   if (kind === "table") {
@@ -447,6 +468,7 @@ export function algebraAcceptSuffix(before, kind) {
 // Sur appel explicite (Ctrl+Espace) : si le mot sous le curseur est une relation/attribut
 // DÉJÀ complet, à une position où un séparateur suit, renvoie ce séparateur (sinon "").
 export function pendingSeparator(textBefore, schema) {
+  textBefore = maskPrimes(textBefore);
   const wm = TRAILING_WORD.exec(textBefore);
   if (!wm) return "";
   const word = wm[0];
@@ -468,6 +490,7 @@ export function pendingSeparator(textBefore, schema) {
 //   { type:"separator", text } : insère directement le séparateur (nom déjà complet) ;
 //   { type:"list", start, word, items } : affiche la popup ; { type:"none" }.
 export function completionAction(mode, textBefore, schema, force = false, fullText = null) {
+  if (mode === "algebra") textBefore = maskPrimes(textBefore);
   if (inString(textBefore)) return { type: "none" };
   if (force && mode === "algebra") {
     const sep = pendingSeparator(textBefore, schema);
@@ -491,6 +514,7 @@ function inString(text) {
 
 // Renvoie { start, word, items:[{label, kind}] } ; items filtrés par préfixe (casse ignorée).
 export function suggest(mode, textBefore, schema, force = false, fullText = null) {
+  if (mode === "algebra") { textBefore = maskPrimes(textBefore); if (fullText) fullText = maskPrimes(fullText); }
   if (inString(textBefore)) return { start: textBefore.length, word: "", items: [] };
   const wm = TRAILING_WORD.exec(textBefore);
   const word = wm ? wm[0] : "";
