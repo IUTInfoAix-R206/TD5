@@ -6,7 +6,8 @@
 //     UNION, INTERSECTION, DIFFERENCE, JOINTURE, DIVISION
 //   - renommage : RENOMMAGE (R / ancien -> nouveau, ...)
 //   - connecteurs booléens : ET / OU / NON (+ parenthèses)
-//   - comparaisons : = <> < > <= >= ; chaînes '...' ; nombres ; temps HH:MM (non quoté)
+//   - comparaisons : = <> < > <= >= ; chaînes '...' ; nombres ; temps HH:MM (non quoté) ;
+//     ou un autre attribut de la relation (SELECTION (R / adresse = villeDep))
 //   - commentaires : -- jusqu'en fin de ligne ; la dernière relation affectée = réponse
 //
 // compileAlgebra(programText, catalog) -> { sql, finalSchema } ; lève AlgebraError.
@@ -152,7 +153,9 @@ function parse(toks) {
     if (ot.type === "STRING") { next(); return { c: "cmp", attr, op, operand: operand("str", ot.value) }; }
     if (ot.type === "NUMBER") { next(); return { c: "cmp", attr, op, operand: operand("num", ot.value) }; }
     if (ot.type === "TIME") { next(); return { c: "cmp", attr, op, operand: operand("time", ot.value) }; }
-    throw new AlgebraError("valeur attendue (chaîne, nombre ou heure HH:MM)", ot.line);
+    // Comparaison entre deux attributs de la relation : SELECTION (R / adresse = villeDep)
+    if (ot.type === "IDENT") { next(); return { c: "cmp", attr, op, operand: operand("attr", ot.value) }; }
+    throw new AlgebraError("valeur attendue (chaîne, nombre, heure HH:MM ou attribut)", ot.line);
   }
 
   // Condition de SELECTION : OU / ET / NON / ( ) / comparaison
@@ -332,6 +335,7 @@ export function compileAlgebra(programText, catalog) {
     if (cond.c === "or") return `(${translateCond(cond.l, schema, line)} OR ${translateCond(cond.r, schema, line)})`;
     if (cond.c === "not") return `(NOT ${translateCond(cond.e, schema, line)})`;
     const idx = resolve(cond.attr, schema, line);
+    if (cond.operand.k === "attr") return `c${idx} ${cond.op} c${resolve(cond.operand.text, schema, line)}`;
     return `c${idx} ${cond.op} ${operandSQL(cond.operand)}`;
   }
 

@@ -2,7 +2,10 @@
 // équivalents que SQLite comprend. Jumeau de scripts/sql_quantifiers.py (sortie
 // identique, prouvée par scripts/test-sql-quantifiers.mjs).
 //
-//   x >= ALL (S) -> x >= (SELECT MAX(c) FROM (S))   ; x < ANY (S) -> x < (SELECT MAX(c) ...)
+//   x >= ALL (S) -> x >= (SELECT CASE WHEN COUNT(*) = 0 THEN -9e999 WHEN COUNT(c) < COUNT(*)
+//                         THEN NULL ELSE MAX(c) END FROM (S))   (sémantique Oracle : vide → vrai,
+//                         NULL dans S → inconnu ; borne x'FF' pour < / <=)
+//   x < ANY (S)  -> x < (SELECT MAX(c) FROM (S)) ; quantificateurs imbriqués réécrits récursivement
 //   x =  ANY (S) -> x IN (S)                        ; x <> ALL (S) -> x NOT IN (S)
 
 const CMP = ["<=", ">=", "<>", "!=", "<", ">", "="]; // plus longs d'abord
@@ -63,15 +66,42 @@ function projColname(subq) {
   return null;
 }
 
+// `SELECT expr FROM …` → `SELECT expr AS q_ FROM …` (expression unique sans alias), pour
+// pouvoir écrire MAX(q_) ; null si la projection n'est pas une expression unique.
+function aliasProjection(subq) {
+  const m = /^\s*SELECT\s+(DISTINCT\s+)?/i.exec(subq);
+  if (!m) return null;
+  const body = subq.slice(m[0].length);
+  const f = firstTopLevelFrom(body);
+  if (f < 0) return null;
+  const proj = body.slice(0, f).replace(/\s+$/, "");
+  let depth = 0;
+  for (const c of proj) {
+    depth += (c === "(" ? 1 : 0) - (c === ")" ? 1 : 0);
+    if (depth === 0 && c === ",") return null;
+  }
+  return subq.slice(0, m[0].length) + proj + " AS q_ " + body.slice(f);
+}
+
 function build(op, kw, subq) {
+  subq = rewriteQuantifiers(subq); // quantificateurs imbriqués
   if (op === "=" && (kw === "ANY" || kw === "SOME")) return `IN (${subq})`;
   if ((op === "<>" || op === "!=") && kw === "ALL") return `NOT IN (${subq})`;
   if (op === "<" || op === "<=" || op === ">" || op === ">=") {
     let agg;
     if (kw === "ALL") agg = (op === ">" || op === ">=") ? "MAX" : "MIN";
     else agg = (op === ">" || op === ">=") ? "MIN" : "MAX";
-    const name = projColname(subq);
+    let name = projColname(subq);
+    if (!name) {
+      subq = aliasProjection(subq);
+      name = subq ? projColname(subq) : null;
+    }
     if (!name) return null;
+    if (kw === "ALL") {
+      const bound = (op === ">" || op === ">=") ? "-9e999" : "x'FF'";
+      return `${op} (SELECT CASE WHEN COUNT(*) = 0 THEN ${bound} ` +
+        `WHEN COUNT(${name}) < COUNT(*) THEN NULL ELSE ${agg}(${name}) END FROM (${subq}))`;
+    }
     return `${op} (SELECT ${agg}(${name}) FROM (${subq}))`;
   }
   return null;
@@ -79,8 +109,10 @@ function build(op, kw, subq) {
 
 export function rewriteQuantifiers(sql) {
   let out = "", i = 0, m;
-  QUANT.lastIndex = 0;
-  while ((m = QUANT.exec(sql)) !== null) {
+  // Expression régulière locale : build() rappelle rewriteQuantifiers (récursion), qui
+  // ne doit pas déplacer le lastIndex de l'appel en cours.
+  const quant = new RegExp(QUANT.source, QUANT.flags);
+  while ((m = quant.exec(sql)) !== null) {
     if (m.index < i) continue; // déjà consommé par une réécriture précédente
     const kw = m[1].toUpperCase();
     let j = m.index - 1;

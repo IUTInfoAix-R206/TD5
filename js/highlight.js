@@ -27,7 +27,7 @@ const FUNCTIONS = new Set([
 const TOKEN_RE = new RegExp(
   "(--[^\\n]*|/\\*[\\s\\S]*?\\*/)" +     // 1 commentaire
   "|('(?:[^']|'')*'|\"[^\"]*\")" +        // 2 chaîne
-  "|(\\b\\d+(?:\\.\\d+)?\\b)" +           // 3 nombre
+  "|(\\d+(?:\\.\\d+)?)" +                   // 3 nombre (sans \\b : « 2a » garde son 2)
   "|([A-Za-z_][A-Za-z0-9_]*)" +          // 4 mot (mot-clé / fonction / identifiant)
   "|(\\s+)" +                             // 5 espaces
   "|([^\\w\\s])",                         // 6 ponctuation / opérateur

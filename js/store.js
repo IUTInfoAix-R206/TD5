@@ -69,8 +69,12 @@ export function buildExport(questions, state) {
       const stmt = keyboardSafe((item.statement || "").replace(/\s+/g, " ").trim());
       lines.push(`-- Q${item.num} - ${stmt}`);
       const answer = (state.answers[item.id] || "").trim();
-      if (answer) {
-        lines.push(answer.endsWith(";") ? answer : answer + ";");
+      if (item.expectedCols === null) {
+        lines.push("-- (question de cours : réponse rédigée sur feuille)");
+      } else if (answer) {
+        // Le « ; » termine une instruction SQL ; il n'existe pas dans la notation algébrique.
+        const sql = questions.mode !== "algebra";
+        lines.push(sql && !answer.endsWith(";") ? answer + ";" : answer);
       } else {
         lines.push("-- (pas de réponse)");
       }

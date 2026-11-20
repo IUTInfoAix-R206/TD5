@@ -170,7 +170,7 @@
           "expectedLabel": "3 attributs, 9 tuples",
           "orderSensitive": false,
           "hashesSorted": [
-            "b7d1adc9b225a73473760e237910c6dd563c5d38402ec2b792e418f112e59764"
+            "d1a36c6e49d8522036d62834c57fb41777df801daaba5d9fd77a5a7d8b12ef84"
           ],
           "hashOrdered": null,
           "difficulty": 3,
@@ -239,64 +239,82 @@
           "id": "q10",
           "num": "10",
           "statement": "Présenter, de manière hiérarchique, les libellés de tous les sous-modules du module Informatique 2de année.",
-          "expectedCols": null,
-          "expectedRows": null,
-          "expectedLabel": null,
+          "expectedCols": 1,
+          "expectedRows": 16,
+          "expectedLabel": "1 attribut, 16 tuples",
           "orderSensitive": false,
-          "hashesSorted": [],
+          "hashesSorted": [
+            "2986991c151d484230698d826dc197f2c38350d46da65898c8069a6ae1903ace"
+          ],
           "hashOrdered": null,
-          "difficulty": null,
-          "tags": [],
-          "sameAs": null,
-          "theoryNote": "Requête Oracle - non auto-évaluable en ligne (à exécuter sous Oracle)."
+          "difficulty": 2,
+          "tags": [
+            "récursion",
+            "cte"
+          ],
+          "sameAs": null
         },
         {
           "type": "question",
           "id": "q11",
           "num": "11",
           "statement": "Présenter, de manière hiérarchique, les libellés du module Outils modèles génie logiciel et de tous ses sous-modules.",
-          "expectedCols": null,
-          "expectedRows": null,
-          "expectedLabel": null,
+          "expectedCols": 1,
+          "expectedRows": 7,
+          "expectedLabel": "1 attribut, 7 tuples",
           "orderSensitive": false,
-          "hashesSorted": [],
+          "hashesSorted": [
+            "3fa037d5727f920311f39c3d64d96a0e34d709433cd6cf67435d8b4cb8a0ba04"
+          ],
           "hashOrdered": null,
-          "difficulty": null,
-          "tags": [],
-          "sameAs": null,
-          "theoryNote": "Requête Oracle - non auto-évaluable en ligne (à exécuter sous Oracle)."
+          "difficulty": 2,
+          "tags": [
+            "récursion",
+            "cte"
+          ],
+          "sameAs": null
         },
         {
           "type": "question",
           "id": "q12",
           "num": "12",
           "statement": "Présenter, de manière hiérarchique, les libellés de tous les modules d'où est issu le module Bases de données.",
-          "expectedCols": null,
-          "expectedRows": null,
-          "expectedLabel": null,
-          "orderSensitive": false,
-          "hashesSorted": [],
-          "hashOrdered": null,
-          "difficulty": null,
-          "tags": [],
-          "sameAs": null,
-          "theoryNote": "Requête Oracle - non auto-évaluable en ligne (à exécuter sous Oracle)."
+          "expectedCols": 1,
+          "expectedRows": 5,
+          "expectedLabel": "1 attribut, 5 tuples",
+          "orderSensitive": true,
+          "hashesSorted": [
+            "244e0ce0a19a7d9dfd2a2aba92673d001e43945bfbcef9eeb22796205b362dba"
+          ],
+          "hashOrdered": "310bdc0149686de928ddd6aba4f182f9901026ff139315a54cece404a9adea8c",
+          "difficulty": 2,
+          "tags": [
+            "récursion",
+            "tri",
+            "cte"
+          ],
+          "sameAs": null
         },
         {
           "type": "question",
           "id": "q13",
           "num": "13",
           "statement": "Présenter, de manière hiérarchique, les libellés de tous les sous-modules de la discipline Informatique, subordonnés au module Informatique 2e année, à l'exception du module Bases de données.",
-          "expectedCols": null,
-          "expectedRows": null,
-          "expectedLabel": null,
+          "expectedCols": 1,
+          "expectedRows": 13,
+          "expectedLabel": "1 attribut, 13 tuples",
           "orderSensitive": false,
-          "hashesSorted": [],
+          "hashesSorted": [
+            "57fbb2539a6717735006428743876b3f75a5df40b4037b6d5a5a2b78ad65f529"
+          ],
           "hashOrdered": null,
-          "difficulty": null,
-          "tags": [],
-          "sameAs": null,
-          "theoryNote": "Requête Oracle - non auto-évaluable en ligne (à exécuter sous Oracle)."
+          "difficulty": 3,
+          "tags": [
+            "récursion",
+            "sélection",
+            "cte"
+          ],
+          "sameAs": null
         }
       ]
     },
@@ -408,32 +426,44 @@
           "id": "q18",
           "num": "18",
           "statement": "Présenter, de manière hiérarchique, les libellés de tous les sous-modules de la discipline Informatique subordonnés au module Informatique 2de année à l'exception du module Codage et circuits et de tous ses éventuels sous-modules.",
-          "expectedCols": null,
-          "expectedRows": null,
-          "expectedLabel": null,
+          "expectedCols": 1,
+          "expectedRows": 13,
+          "expectedLabel": "1 attribut, 13 tuples",
           "orderSensitive": false,
-          "hashesSorted": [],
+          "hashesSorted": [
+            "ead3834285dada956678bb7110f0f2ca85195492a969afaa10e47f6c05f0d173"
+          ],
           "hashOrdered": null,
-          "difficulty": null,
-          "tags": [],
-          "sameAs": null,
-          "theoryNote": "Requête Oracle - non auto-évaluable en ligne (à exécuter sous Oracle)."
+          "difficulty": 3,
+          "tags": [
+            "récursion",
+            "sélection",
+            "cte"
+          ],
+          "sameAs": null
         },
         {
           "type": "question",
           "id": "q19",
           "num": "19",
           "statement": "Présenter, de manière hiérarchique, les modules suivis par l'étudiant Jérôme Atlani ?",
-          "expectedCols": null,
-          "expectedRows": null,
-          "expectedLabel": null,
+          "expectedCols": 1,
+          "expectedRows": 24,
+          "expectedLabel": "1 attribut, 24 tuples",
           "orderSensitive": false,
-          "hashesSorted": [],
+          "hashesSorted": [
+            "be9ea594cad3a2f92e892c2276f619098308abf0690f5a1546ef097db810b157"
+          ],
           "hashOrdered": null,
-          "difficulty": null,
-          "tags": [],
-          "sameAs": null,
-          "theoryNote": "Requête Oracle - non auto-évaluable en ligne (à exécuter sous Oracle)."
+          "difficulty": 3,
+          "tags": [
+            "récursion",
+            "jointure",
+            "imbrication",
+            "semi-jointure",
+            "cte"
+          ],
+          "sameAs": null
         },
         {
           "type": "question",

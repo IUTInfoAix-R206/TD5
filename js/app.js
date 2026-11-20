@@ -71,6 +71,7 @@ function renderHeader(root) {
   resetBtn.addEventListener("click", () => {
     if (!confirm("Effacer toutes vos réponses enregistrées dans ce navigateur ?")) return;
     store.clear();
+    try { localStorage.removeItem(`webtd:${questions.tdId}:playground`); } catch { /* ignore */ }
     state = { answers: {}, name: "" };
     location.reload();
   });
@@ -149,6 +150,7 @@ R2 := PROJECTION (R1 / numAv, nomAv)</pre>
       Conditions : comparateurs <code>=</code> <code>&lt;&gt;</code> <code>&lt;</code> <code>&gt;</code>
       <code>&lt;=</code> <code>&gt;=</code> ; connecteurs <code>ET</code> / <code>OU</code> / <code>NON</code> ;
       chaînes entre apostrophes <code>'TEXTE'</code> ; heures <code>HH:MM</code> ;
+      comparaison entre deux attributs (<code>adresse = villeDep</code>) ;
       commentaire <code>--</code> en fin de ligne. Opérateurs en <strong>MAJUSCULES sans accent</strong>.
     </p>`;
   details.appendChild(body);
@@ -203,7 +205,7 @@ function renderHowItWorks(root) {
       try { sql = compileAlgebra(input, catalog).sql; }
       catch (e) { resultEl.replaceChildren(el("div", { class: "sql-error", text: String(e && e.message || e) })); return; }
     }
-    try { resultEl.replaceChildren(renderTable(runQuery(sql))); }
+    try { resultEl.replaceChildren(renderTable(runQuery(sql, mode))); }
     catch (e) { resultEl.replaceChildren(el("div", { class: "sql-error", text: String(e && e.message || e) })); }
   }
 
@@ -270,7 +272,29 @@ function renderTable(result) {
 
 // ── Évaluation d'une réponse ────────────────────────────────────────────────
 
-async function grade(question, result) {
+// Permutations des indices 0..n-1 (hors identité), pour reconnaître un résultat juste
+// aux colonnes près. Limité à 6 colonnes (720 permutations).
+function permutations(n) {
+  const out = [];
+  const rec = (prefix, rest) => {
+    if (!rest.length) { out.push(prefix); return; }
+    rest.forEach((x, i) => rec(prefix.concat(x), rest.slice(0, i).concat(rest.slice(i + 1))));
+  };
+  rec([], [...Array(n).keys()]);
+  return out.slice(1);
+}
+
+async function columnsPermuted(question, result) {
+  const n = result.cols.length;
+  if (n < 2 || n > 6) return false;
+  for (const perm of permutations(n)) {
+    const rows = result.rows.map((r) => perm.map((i) => r[i]));
+    if (question.hashesSorted.includes(await hashResult(n, rows, false))) return true;
+  }
+  return false;
+}
+
+async function grade(question, result, input = "") {
   if (result.error) return { kind: "error", message: result.error };
   const ncols = result.cols.length;
   const nrows = result.rows.length;
@@ -295,10 +319,20 @@ async function grade(question, result) {
   }
 
   let kind;
+  let permuted = false, roundHint = false;
   if (exact) kind = "exact";
   else if (orderWrong) kind = "order";
   else kind = "wrong";
-  return { kind, colsOk, rowsOk, ncols, nrows };
+  if (kind === "wrong" && colsOk && rowsOk) {
+    if (await columnsPermuted(question, result)) {
+      permuted = true;
+      // En algèbre relationnelle, l'ordre des attributs n'a pas de sens.
+      kind = mode === "algebra" && !question.orderSensitive ? "exact" : "columns";
+    } else if (mode === "sql" && /\b(ROUND|TRUNC)\s*\(/i.test(input)) {
+      roundHint = true;
+    }
+  }
+  return { kind, colsOk, rowsOk, ncols, nrows, permuted, roundHint };
 }
 
 function chip(label, ok) {
@@ -326,10 +360,18 @@ function renderFeedback(question, g) {
 
   if (g.kind === "exact") {
     box.appendChild(el("span", { class: "chip chip-ok chip-strong", text: "✓ Résultat exact" }));
+    if (g.permuted) {
+      box.appendChild(el("span", { class: "chip chip-warn", text: "attributs dans un autre ordre (équivalent en algèbre)" }));
+    }
+  } else if (g.kind === "columns") {
+    box.appendChild(el("span", { class: "chip chip-warn", text: "≈ Contenu correct, mais les colonnes ne sont pas dans l'ordre demandé" }));
   } else if (g.kind === "order") {
     box.appendChild(el("span", { class: "chip chip-warn", text: "≈ Contenu correct, mais l'ordre demandé n'est pas respecté" }));
   } else if (g.colsOk && g.rowsOk) {
     box.appendChild(el("span", { class: "chip chip-ko", text: "✗ Bons nombres de colonnes/lignes, mais le contenu diffère" }));
+    if (g.roundHint) {
+      box.appendChild(el("span", { class: "chip chip-warn", text: "Le résultat attendu n'est pas arrondi : retirez ROUND / TRUNC si l'énoncé ne le demande pas" }));
+    }
   } else {
     box.appendChild(el("span", { class: "chip chip-ko", text: "✗ Résultat incorrect" }));
   }
@@ -434,6 +476,22 @@ function renderQuestion(container, question) {
     sqlBox = el("details", { class: "sql-generated" }, [el("summary", { text: "SQL généré (enseignant)" }), sqlPre]);
   }
 
+  // Compile (algèbre), exécute et évalue une saisie : { result, g } ou { compileError }.
+  async function evaluate(input) {
+    let sql = input;
+    if (mode === "algebra") {
+      try {
+        sql = compileAlgebra(input, catalog).sql;
+        if (sqlPre) sqlPre.textContent = sql;
+      } catch (e) {
+        if (sqlPre) sqlPre.textContent = "(erreur de compilation)";
+        return { compileError: String(e && e.message || e) };
+      }
+    }
+    const result = runQuery(sql, mode);
+    return { result, g: await grade(question, result, input) };
+  }
+
   async function run() {
     const input = textarea.value.trim();
     if (!input) {
@@ -445,24 +503,17 @@ function renderQuestion(container, question) {
     state.answers[question.id] = textarea.value;
     store.save(state);
     try {
-      let sql = input;
-      if (mode === "algebra") {
-        try {
-          sql = compileAlgebra(input, catalog).sql;
-          if (sqlPre) sqlPre.textContent = sql;
-        } catch (e) {
-          if (sqlPre) sqlPre.textContent = "(erreur de compilation)";
-          resultEl.replaceChildren();
-          feedbackEl.replaceChildren(el("div", { class: "feedback feedback-error" }, [
-            el("span", { class: "chip chip-ko", text: "✗ " + String(e && e.message || e) }),
-          ]));
-          status.textContent = "";
-          return;
-        }
+      const { result, g, compileError } = await evaluate(input);
+      if (compileError) {
+        resultEl.replaceChildren();
+        feedbackEl.replaceChildren(el("div", { class: "feedback feedback-error" }, [
+          el("span", { class: "chip chip-ko", text: "✗ " + compileError }),
+        ]));
+        status.textContent = "";
+        updateProgress();
+        return;
       }
-      const result = runQuery(sql);
       resultEl.replaceChildren(renderTable(result));
-      const g = await grade(question, result);
       feedbackEl.replaceChildren(renderFeedback(question, g));
       status.textContent = g.kind === "exact" ? "✓" : "";
       status.className = "q-status " + (g.kind === "exact" ? "ok" : "");
@@ -483,7 +534,17 @@ function renderQuestion(container, question) {
   if (sqlBox) card.appendChild(sqlBox);
   container.appendChild(card);
 
-  cards.set(question.id, { status });
+  // Au chargement : réévalue la réponse enregistrée pour restaurer ✓ et la progression.
+  async function restore() {
+    const input = textarea.value.trim();
+    if (!input) return;
+    try {
+      const { g } = await evaluate(input);
+      if (g && g.kind === "exact") { status.textContent = "✓"; status.className = "q-status ok"; }
+    } catch { /* ignore */ }
+  }
+
+  cards.set(question.id, { status, restore });
 }
 
 // Question de cours : énoncé seul, sans éditeur ni auto-évaluation.
@@ -520,6 +581,7 @@ async function main() {
     return;
   }
   mode = questions.mode || "sql";
+  document.title = [questions.tdLabel, questions.title].filter(Boolean).join(" - ") || document.title;
   catalog = (questions.database && questions.database.catalog) || null;
   showSql = mode === "algebra" && new URLSearchParams(location.search).has("sql");
   store = makeStore(questions.tdId);
@@ -549,6 +611,8 @@ async function main() {
   try {
     await initEngine(questions.database.schemaFile, questions.database.insertFile);
     status.remove();
+    // Progression : réévalue les réponses enregistrées dans ce navigateur.
+    for (const refs of cards.values()) await refs.restore();
   } catch (e) {
     status.className = "engine-status fatal";
     status.textContent = "Échec du chargement de SQLite : " + (e.message || e)
