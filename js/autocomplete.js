@@ -4,8 +4,10 @@
 // et des mots-clés SQL / opérateurs d'algèbre. Contextuelle :
 //   - SQL : après FROM/JOIN -> tables ; « alias. » ou « table. » -> colonnes de cette table ;
 //           ailleurs -> colonnes puis tables puis mots-clés.
-//   - Algèbre : après « / » -> attributs (+ ET/OU/NON) ; après « ( » ou « , » -> relations ;
-//               début d'expression / après « := » ou « = » d'affectation -> opérateurs.
+//   - Algèbre : après « := » ou « = » d'affectation -> opérateurs ; opérandes (avant « / »)
+//               -> relations ; après « / » -> attributs de l'opérande, à chaque élément d'une
+//               liste (« , ») et dans les conditions (après ET/OU/NON, « ( », un comparateur) ;
+//               après une comparaison complète -> ET/OU. Voir algebraContext.
 //   Le filtrage par préfixe ignore casse et accents (« sel » propose SÉLECTION).
 //
 // La logique de suggestion (suggest, buildAliasMap) est PURE (pas de DOM) et testée par
@@ -36,9 +38,8 @@ const SQL_COMPARATORS = ["=", "<>", "<", ">", "<=", ">="];
 const SQL_PREDICATE_KW = ["IN", "LIKE", "BETWEEN", "IS", "NOT"];
 const SQL_CONNECTORS = ["AND", "OR"];
 const SQL_FUNCS_SET = new Set(SQL_FUNCTIONS);
-// Opérateurs relationnels seulement (proposés en début d'expression). Les connecteurs
-// ET/OU/NON ne sont PAS complétés : ils ne peuvent pas ouvrir une condition (on commence
-// par un attribut) et sont assez courts pour être tapés à la main.
+// Opérateurs relationnels (proposés en début d'expression). Les connecteurs ET/OU ne
+// sont proposés qu'après une comparaison complète (jamais pour ouvrir une condition).
 // Graphie française (accentuée), acceptée par le compilateur comme la forme sans accent.
 const ALGEBRA_OPERATORS = [
   "SÉLECTION", "PROJECTION", "RENOMMAGE", "UNION", "INTERSECTION", "DIFFÉRENCE",
@@ -221,50 +222,106 @@ function sqlCandidates(textBefore, start, qualifier, schema, fullText) {
 }
 
 function algebraCandidates(textBefore, start, schema) {
-  const tables = upTables(schema);
-  const cols = upCols(schema.allColumns);
-  const ops = ALGEBRA_OPERATORS.map((x) => ({ label: x, kind: "kw" }));
   const before = textBefore.slice(0, start);
-  const trimmed = before.replace(/\s+$/, "");
-  if (trimmed === "" || ASSIGN_START.test(before.slice(before.lastIndexOf("\n") + 1))) return ops;
-  let j = start - 1;
-  while (j >= 0 && /\s/.test(textBefore[j])) j--;
-  const prev = j >= 0 ? textBefore[j] : "";
-  // Après un comparateur ou la flèche « -> » de RENOMMAGE : valeur / nouveau nom (saisie libre).
-  if (prev === ">" || prev === "<" || prev === "=") return [];
-  if (prev === "/") {
-    // Attributs de la relation en cours (pas toutes les tables) ; repli si indéterminé.
-    const attrs = contextAttributes(before, schema);
-    const list = attrs && attrs.length ? attrs : (schema.allColumns || []);
-    return list.map((x) => ({ label: x.toUpperCase(), kind: "col" }));
+  const ctx = algebraContext(before, schema);
+  const kw = (list) => list.map((x) => ({ label: x, kind: "kw" }));
+  switch (ctx.zone) {
+    case "expr": return kw(ALGEBRA_OPERATORS);
+    case "relation": {
+      // Opérande : relation de base OU relation intermédiaire (Rn) déjà définie.
+      const rels = definedRelations(before, schema).names.map((n) => ({ label: n.toUpperCase(), kind: "rel" }));
+      return [...upTables(schema), ...rels];
+    }
+    case "attribute": return upCols(ctx.attrs);
+    case "connector": return kw(ctx.connectors);
+    default: return []; // nom de relation à affecter, nouveau nom (RENOMMAGE), après un attribut…
   }
-  if (prev === "(" || prev === ",") {
-    // Opérande : relation de base OU relation intermédiaire (Rn) déjà définie.
-    const rels = definedRelations(before, schema).names.map((n) => ({ label: n.toUpperCase(), kind: "rel" }));
-    return [...tables, ...rels];
-  }
-  return [...ops, ...tables, ...cols];
 }
 
-// Opérateur (et nombre de virgules de premier niveau) de la parenthèse englobant la
-// fin de `before` — pour savoir quel séparateur suit une relation/attribut.
+// Jetons d'un fragment d'algèbre (chaînes, heures, nombres, mots, symboles).
+const ALG_TOKEN = /'[^']*'|\d{1,2}:\d{2}|\d+(?:\.\d+)?|[A-Za-z_À-ɏ][\w.À-ɏ]*|->|<=|>=|<>|!=|=|<|>|\S/g;
+const isCmp = (t) => /^(<=|>=|<>|!=|=|<|>)$/.test(t || "");
+const isWord = (t) => /^[A-Za-z_À-ɏ]/.test(t || "");
+const BOOL_KW = new Set(["ET", "OU", "NON"]);
+const isBool = (t) => isWord(t) && BOOL_KW.has(fold(t).toUpperCase());
+const OPERATOR_SET = new Set(ALGEBRA_OPERATORS.map((x) => fold(x).toUpperCase()));
+
+// Parenthèse d'opérateur englobant la fin de `before` (sur la ligne courante) :
+// la plus intérieure des parenthèses non fermées précédée d'un opérateur (les
+// parenthèses d'une sous-condition de SÉLECTION sont traversées). Chaînes ignorées.
 function enclosingOperator(before) {
-  let depth = 0, openIdx = -1;
-  for (let i = before.length - 1; i >= 0; i--) {
-    if (before[i] === ")") depth++;
-    else if (before[i] === "(") { if (depth === 0) { openIdx = i; break; } depth--; }
+  const lineStart = before.lastIndexOf("\n") + 1;
+  const stack = [];
+  let inStr = false;
+  for (let i = lineStart; i < before.length; i++) {
+    const c = before[i];
+    if (inStr) { if (c === "'") inStr = false; continue; }
+    if (c === "'") inStr = true;
+    else if (c === "(") stack.push(i);
+    else if (c === ")") stack.pop();
   }
-  if (openIdx < 0) return null;
-  let j = openIdx - 1;
-  while (j >= 0 && /\s/.test(before[j])) j--;
-  const m = new RegExp(OP_WORD + "$").exec(before.slice(0, j + 1));
-  let commas = 0, d = 0;
-  for (let i = openIdx + 1; i < before.length; i++) {
-    if (before[i] === "(") d++;
-    else if (before[i] === ")") d--;
-    else if (before[i] === "," && d === 0) commas++;
+  for (let k = stack.length - 1; k >= 0; k--) {
+    const openIdx = stack[k];
+    const m = new RegExp("(" + OP_WORD + ")\\s*$").exec(before.slice(lineStart, openIdx));
+    const op = m ? fold(m[1]).toUpperCase() : null;
+    if (!op || !OPERATOR_SET.has(op)) continue;
+    const inner = before.slice(openIdx + 1);
+    const slash = topLevelIndex(inner, "/");
+    const operandsPart = slash >= 0 ? inner.slice(0, slash) : inner;
+    const commas = splitTopLevel(operandsPart, ",").length - 1;
+    return { op, commas, openIdx, slash: slash >= 0 ? openIdx + 1 + slash : -1 };
   }
-  return { op: m ? fold(m[0]).toUpperCase() : null, commas, openIdx };
+  return null;
+}
+
+// Contexte du curseur en algèbre (`before` = texte jusqu'au début du mot en cours) :
+//   { zone: "name" }                 nom de la relation affectée (début de ligne) ;
+//   { zone: "expr" }                 après « := » / « = » : opérateur ;
+//   { zone: "relation", info }       opérande d'un opérateur (avant « / ») ;
+//   { zone: "attribute", attrs }     attribut de l'opérande (liste, condition, côté droit
+//                                    d'une comparaison, ancien nom de RENOMMAGE) ;
+//   { zone: "connector", connectors} après une comparaison complète : ET / OU ;
+//   { zone: "none" }                 saisie libre (nouveau nom, comparateur attendu…).
+export function algebraContext(before, baseSchema) {
+  const line = before.slice(before.lastIndexOf("\n") + 1);
+  if (/^\s*$/.test(line)) return { zone: "name" };
+  if (ASSIGN_START.test(line)) return { zone: "expr" };
+  const info = enclosingOperator(before);
+  if (!info) return { zone: "none" };
+  if (info.slash < 0) return { zone: "relation", info };
+  const attrs = operandAttributes(before, info, baseSchema);
+  const toks = before.slice(info.slash + 1).match(ALG_TOKEN) || [];
+  const last = toks[toks.length - 1], prev = toks[toks.length - 2];
+  const attribute = { zone: "attribute", attrs };
+  const none = { zone: "none" };
+  if (info.op === "PROJECTION" || info.op === "DIVISION") {
+    return !last || last === "," ? attribute : none;
+  }
+  if (info.op === "RENOMMAGE") {
+    return !last || last === "," ? attribute : none; // après « -> » : nouveau nom, libre
+  }
+  if (info.op === "SELECTION" || info.op === "JOINTURE") {
+    // Début de condition, après ET/OU/NON, « ( » ou un comparateur : un attribut.
+    if (!last || last === "(" || isBool(last) || isCmp(last)) return attribute;
+    // Après une comparaison complète (valeur, attribut comparé, sous-condition fermée).
+    const value = last.startsWith("'") || /^\d/.test(last) || (isWord(last) && isCmp(prev));
+    if (value || last === ")") {
+      return { zone: "connector", connectors: info.op === "JOINTURE" ? ["ET"] : ["ET", "OU"] };
+    }
+  }
+  return none;
+}
+
+// Attributs utilisables dans la partie « / … » de l'opérateur `info`.
+function operandAttributes(before, info, baseSchema) {
+  const { schemas } = definedRelations(before, baseSchema);
+  const end = info.slash >= 0 ? info.slash : before.length;
+  const operands = splitTopLevel(before.slice(info.openIdx + 1, end), ",").map((s) => s.trim()).filter(Boolean);
+  const sch = (n) => relationSchema(n, schemas, baseSchema) || [];
+  // JOINTURE (condition) et DIVISION (liste) portent sur les attributs des DEUX relations.
+  const list = info.op === "JOINTURE" || info.op === "DIVISION"
+    ? [...sch(operands[0]), ...sch(operands[1])] : sch(operands[0]);
+  return list.length ? list : (baseSchema.allColumns || []);
 }
 
 // ── Suivi du schéma des relations (pour proposer les attributs du bon opérande) ──
@@ -361,17 +418,9 @@ function definedRelations(textBefore, baseSchema) {
 // Attributs disponibles à l'endroit du curseur (après « / »), = schéma du/des opérande(s)
 // de l'opérateur courant. null si indéterminé (→ repli sur toutes les colonnes).
 export function contextAttributes(textBefore, baseSchema) {
-  const { schemas } = definedRelations(textBefore, baseSchema);
   const info = enclosingOperator(textBefore);
-  if (!info || info.openIdx < 0) return null;
-  const afterOpen = textBefore.slice(info.openIdx + 1);
-  const slash = topLevelIndex(afterOpen, "/");
-  const operandsPart = slash >= 0 ? afterOpen.slice(0, slash) : afterOpen;
-  const operands = splitTopLevel(operandsPart, ",").map((s) => s.trim()).filter(Boolean);
-  const sch = (n) => relationSchema(n, schemas, baseSchema) || [];
-  // JOINTURE : la condition peut porter sur les attributs des DEUX relations.
-  if (info.op === "JOINTURE") return [...sch(operands[0]), ...sch(operands[1])];
-  return sch(operands[0]);
+  if (!info) return null;
+  return operandAttributes(textBefore, { ...info, slash: info.slash >= 0 ? info.slash : textBefore.length }, baseSchema);
 }
 
 const AL_UNARY = ["SELECTION", "PROJECTION", "RENOMMAGE"];
@@ -401,18 +450,18 @@ export function pendingSeparator(textBefore, schema) {
   const wm = TRAILING_WORD.exec(textBefore);
   if (!wm) return "";
   const word = wm[0];
-  const start = textBefore.length - word.length;
-  let j = start - 1;
-  while (j >= 0 && /\s/.test(textBefore[j])) j--;
-  const prev = j >= 0 ? textBefore[j] : "";
-  let kind = null;
-  if (prev === "(" || prev === ",") kind = "table";
-  else if (prev === "/") kind = "col";
-  else return "";
-  const wl = word.toLowerCase();
-  const list = kind === "table" ? (schema.tables || []) : (schema.allColumns || []);
-  if (!list.some((x) => x.toLowerCase() === wl)) return "";
-  return algebraAcceptSuffix(textBefore.slice(0, start), kind);
+  const before = textBefore.slice(0, textBefore.length - word.length);
+  const ctx = algebraContext(before, schema);
+  let kind, list;
+  if (ctx.zone === "relation") {
+    kind = "table";
+    list = [...(schema.tables || []), ...definedRelations(before, schema).names];
+  } else if (ctx.zone === "attribute") {
+    kind = "col"; list = ctx.attrs;
+  } else return "";
+  const wl = fold(word);
+  if (!list.some((x) => fold(x) === wl)) return "";
+  return algebraAcceptSuffix(before, kind);
 }
 
 // Décision d'un déclenchement de complétion, testable sans DOM :
