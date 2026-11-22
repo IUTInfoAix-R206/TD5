@@ -27,7 +27,8 @@ CREATE TABLE Professeur (
     cpProf       VARCHAR(5),
     villeProf    VARCHAR(20),
     specProf     VARCHAR(7),
-    UNIQUE (nomProf, prenomProf)
+    UNIQUE (nomProf, prenomProf),
+    CONSTRAINT fk_prof_module FOREIGN KEY (specProf) REFERENCES Module(code)
 );
 
 CREATE TABLE Module (

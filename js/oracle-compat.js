@@ -19,7 +19,7 @@ import { rewriteQuantifiers } from "./sql-quantifiers.js";
 
 // ── Tokenisation ─────────────────────────────────────────────────────────────
 
-const TOKEN_RE = new RegExp(
+export const TOKEN_RE = new RegExp(
   "(?<ws>\\s+)" +
   "|(?<comment>--[^\\n]*|/\\*[\\s\\S]*?(?:\\*/|$))" +
   "|(?<str>'(?:[^']|'')*'?)" +
@@ -90,7 +90,7 @@ function tokenize(sql) {
   return toks;
 }
 
-class Rewriter {
+export class Rewriter {
   constructor(sql) {
     this.src = sql;
     this.t = tokenize(sql);
