@@ -12,10 +12,12 @@
 import {
   translateOracle, checkOracle, registerOracleFunctions, ORACLE_SETUP_SQL, oracleHint,
 } from "./oracle-compat.js";
+import { runSessionAnswer } from "./session-grade.js";
 
 let SQL = null;
 let snapshot = null;
 let schemaCache = null;
+let oracleScript = null;
 
 // Fonctions de compatibilité Oracle (ORA_*, LIKE sensible à la casse), réenregistrées
 // sur chaque base fraîche. Voir oracle-compat.js (jumeau de scripts/oracle_compat.py).
@@ -37,6 +39,19 @@ export async function initEngine(schemaUrl, insertUrl) {
   snapshot = db.export();
   schemaCache = null;
   db.close();
+}
+
+// Questions LDD/LMD : script Oracle des données (point de départ de chaque session).
+export async function initSession(oracleUrl) {
+  oracleScript = await fetch(oracleUrl).then((r) => r.text());
+}
+
+// Exécute une réponse LDD/LMD : voir session-grade.js.
+export function runSession(prefix, answer, probes) {
+  if (!SQL || oracleScript === null) {
+    return { error: "Le moteur SQL est encore en cours de chargement : réessayez dans un instant." };
+  }
+  return runSessionAnswer(SQL, oracleScript, prefix, answer, probes);
 }
 
 // Garde-fous : sql.js s'exécute dans le fil principal ; une requête sans fin (CTE

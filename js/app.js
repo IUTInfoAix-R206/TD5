@@ -1,6 +1,7 @@
 // app.js - interface du TP SQL en ligne.
 
-import { initEngine, runQuery, getSchema } from "./engine.js";
+import { initEngine, initSession, runQuery, runSession, getSchema } from "./engine.js";
+import { gradeSession, missingPrerequisites } from "./session-grade.js";
 import { hashResult } from "./canon.js";
 import { makeStore, buildExport, downloadText, exportFilename } from "./store.js";
 import { highlightSQL, highlightAlgebra } from "./highlight.js";
@@ -178,7 +179,12 @@ function renderHowItWorks(root) {
     <p>La base est <strong>réinitialisée à chaque exécution</strong> : vous pouvez tout tester
        sans risque. Vos réponses restent dans ce navigateur ; le bouton
        <strong>Exporter .${isAlg ? "algebre" : "sql"}</strong> les télécharge pour les rendre.</p>
-    ${isAlg ? "<p>La notation de référence est imposée (voir le rappel de syntaxe) ; toute erreur est signalée précisément avec le numéro de ligne.</p>" : ""}`;
+    ${isAlg ? "<p>La notation de référence est imposée (voir le rappel de syntaxe) ; toute erreur est signalée précisément avec le numéro de ligne.</p>" : ""}
+    ${questions.database.oracleFile ? `<p>Les questions qui <strong>modifient le schéma ou les données</strong> (ALTER, CREATE,
+       UPDATE…) acceptent plusieurs instructions, comme SQL*Plus. Elles sont notées sur
+       <strong>l'état de la base</strong> obtenu, pas sur le texte de la réponse. Chacune part des données
+       d'origine, ou de l'état obtenu après vos réponses aux questions indiquées : elle reste
+       bloquée tant que celles-ci ne sont pas exactes.</p>` : ""}`;
   body.appendChild(intro);
 
   // ── Terrain d'essai ────────────────────────────────────────────────────────
@@ -387,6 +393,52 @@ function difficultyStars(n) {
   return "★".repeat(n) + "☆".repeat(Math.max(0, 5 - n));
 }
 
+// Texte d'une liste de questions : « Q11, Q16 et Q19 ».
+function questionList(ids) {
+  const names = ids.map((id) => id.toUpperCase());
+  return names.length > 1 ? `${names.slice(0, -1).join(", ")} et ${names[names.length - 1]}` : names[0];
+}
+
+// Résultat de chaque instruction d'une réponse LDD/LMD.
+function renderSteps(steps) {
+  const box = el("div", { class: "session-steps" });
+  for (const step of steps) {
+    const sql = step.sql.replace(/\s+/g, " ").trim();
+    const label = sql.length > 90 ? sql.slice(0, 87) + "…" : sql;
+    if (step.error !== undefined) {
+      box.appendChild(el("div", { class: "sql-error", text: `${label}\n→ ${step.error}` }));
+    } else if (step.rows) {
+      box.appendChild(el("div", { class: "session-step", text: label }));
+      // DESCRIBE : colonne « Null? » vide quand la colonne accepte NULL, comme SQL*Plus.
+      const describe = step.cols.join() === "Name,Null?,Type";
+      const rows = describe ? step.rows.map(([n, nul, t]) => [n, nul ?? "", t]) : step.rows;
+      box.appendChild(renderTable({ cols: step.cols, rows }));
+    } else {
+      box.appendChild(el("div", { class: "session-step", text: "✓ " + label }));
+    }
+  }
+  return box;
+}
+
+function renderSessionFeedback(g) {
+  const box = el("div", { class: "feedback" });
+  if (g.exact) {
+    box.appendChild(el("span", { class: "chip chip-ok chip-strong", text: "✓ État de la base exact" }));
+    return box;
+  }
+  box.appendChild(el("span", { class: "chip chip-ko", text: "✗ La base n'est pas dans l'état attendu" }));
+  for (const k of g.missing) box.appendChild(el("span", { class: "chip chip-ko", text: `${k} : absente` }));
+  for (const k of g.extra) box.appendChild(el("span", { class: "chip chip-ko", text: `${k} : en trop` }));
+  for (const k of g.different) {
+    box.appendChild(el("span", { class: "chip chip-ko", text: `${k} : colonnes, clés ou lignes différentes` }));
+  }
+  if (!g.probes) {
+    box.appendChild(el("span", { class: "chip chip-warn",
+      text: "Contraintes : elles n'acceptent pas exactement les valeurs attendues" }));
+  }
+  return box;
+}
+
 function renderQuestion(container, question) {
   const card = el("section", { class: "question-card", attrs: { id: question.id } });
 
@@ -400,7 +452,17 @@ function renderQuestion(container, question) {
 
   card.appendChild(el("p", { class: "q-statement", text: question.statement }));
   if (question.expectedLabel) {
-    card.appendChild(el("p", { class: "q-expected", text: "Attendu : " + question.expectedLabel }));
+    const what = question.session ? "Pour vérifier : " : "Attendu : ";
+    card.appendChild(el("p", { class: "q-expected", text: what + question.expectedLabel }));
+  }
+  let lockEl = null;
+  if (question.session) {
+    const requires = question.session.requires;
+    card.appendChild(el("p", { class: "q-start", text: requires.length
+      ? `Part de l'état de la base obtenu après ${requires.length > 1 ? "vos réponses" : "votre réponse"} à ${questionList(requires)}.`
+      : "Part des données d'origine." }));
+    lockEl = el("p", { class: "q-locked" });
+    card.appendChild(lockEl);
   }
   if (question.sameAs) {
     card.appendChild(el("p", { class: "q-sameas", text: "Même résultat que " + question.sameAs.toUpperCase() }));
@@ -478,8 +540,30 @@ function renderQuestion(container, question) {
     sqlBox = el("details", { class: "sql-generated" }, [el("summary", { text: "SQL généré (enseignant)" }), sqlPre]);
   }
 
+  // Question LDD/LMD : bloquée tant qu'un prérequis n'est pas exact.
+  function missing() {
+    return question.session ? missingPrerequisites(question, isExact) : [];
+  }
+  function refreshLock() {
+    if (!lockEl) return;
+    const left = missing();
+    runBtn.disabled = left.length > 0;
+    lockEl.textContent = left.length ? `🔒 Réussissez d'abord ${questionList(left)}.` : "";
+  }
+
+  async function evaluateSession(input) {
+    const prefix = question.session.requires.map((id) => state.answers[id] || "");
+    const run = runSession(prefix, input, question.session.probes);
+    if (run.error) return { compileError: run.error };
+    return { steps: run.steps, g: await gradeSession(question, run) };
+  }
+
   // Compile (algèbre), exécute et évalue une saisie : { result, g } ou { compileError }.
   async function evaluate(input) {
+    if (question.session) {
+      if (missing().length) return { locked: true };
+      return evaluateSession(input);
+    }
     let sql = input;
     if (mode === "algebra") {
       try {
@@ -505,7 +589,15 @@ function renderQuestion(container, question) {
     state.answers[question.id] = textarea.value;
     store.save(state);
     try {
-      const { result, g, compileError } = await evaluate(input);
+      const { result, g, compileError, steps, locked } = await evaluate(input);
+      if (locked) return;
+      if (steps) {
+        resultEl.replaceChildren(renderSteps(steps));
+        feedbackEl.replaceChildren(renderSessionFeedback(g));
+        setStatus(g.exact);
+        await afterChange();
+        return;
+      }
       if (compileError) {
         resultEl.replaceChildren();
         feedbackEl.replaceChildren(el("div", { class: "feedback feedback-error" }, [
@@ -517,9 +609,8 @@ function renderQuestion(container, question) {
       }
       resultEl.replaceChildren(renderTable(result));
       feedbackEl.replaceChildren(renderFeedback(question, g));
-      status.textContent = g.kind === "exact" ? "✓" : "";
-      status.className = "q-status " + (g.kind === "exact" ? "ok" : "");
-      updateProgress();
+      setStatus(g.kind === "exact");
+      await afterChange();
     } catch (e) {
       feedbackEl.replaceChildren(el("div", { class: "feedback feedback-error" }, [
         el("span", { class: "chip chip-ko", text: "✗ Erreur interne : " + String(e && e.message || e) }),
@@ -536,17 +627,24 @@ function renderQuestion(container, question) {
   if (sqlBox) card.appendChild(sqlBox);
   container.appendChild(card);
 
-  // Au chargement : réévalue la réponse enregistrée pour restaurer ✓ et la progression.
+  function setStatus(exact) {
+    status.textContent = exact ? "✓" : "";
+    status.className = "q-status " + (exact ? "ok" : "");
+  }
+
+  // Réévalue la réponse enregistrée (au chargement, ou quand un prérequis change).
   async function restore() {
+    refreshLock();
     const input = textarea.value.trim();
-    if (!input) return;
+    setStatus(false);
+    if (!input || missing().length) return;
     try {
       const { g } = await evaluate(input);
-      if (g && g.kind === "exact") { status.textContent = "✓"; status.className = "q-status ok"; }
+      if (g) setStatus(question.session ? g.exact : g.kind === "exact");
     } catch { /* ignore */ }
   }
 
-  cards.set(question.id, { status, restore });
+  cards.set(question.id, { status, restore, session: Boolean(question.session) });
 }
 
 // Question de cours : énoncé seul, sans éditeur ni auto-évaluation.
@@ -559,6 +657,17 @@ function renderTheory(container, question) {
 }
 
 // ── Progression ─────────────────────────────────────────────────────────────
+
+function isExact(id) {
+  const refs = cards.get(id);
+  return Boolean(refs) && refs.status.textContent === "✓";
+}
+
+// Une réponse a changé : les questions LDD/LMD qui en partent sont réévaluées, dans l'ordre.
+async function afterChange() {
+  for (const refs of cards.values()) if (refs.session) await refs.restore();
+  updateProgress();
+}
 
 let totalQuestions = 0;
 const exactSet = new Set();
@@ -601,7 +710,7 @@ async function main() {
       if (item.type === "instruction") main.appendChild(el("p", { class: "instruction", text: item.text }));
       else if (item.type === "text") main.appendChild(el("p", { class: "free-text", text: item.text }));
       else if (item.type === "question") {
-        if (item.expectedCols === null) { renderTheory(main, item); }   // question de cours
+        if (item.expectedCols === null && !item.session) { renderTheory(main, item); }   // question de cours
         else { totalQuestions++; renderQuestion(main, item); }
       }
     }
@@ -612,6 +721,7 @@ async function main() {
   root.appendChild(status);
   try {
     await initEngine(questions.database.schemaFile, questions.database.insertFile);
+    if (questions.database.oracleFile) await initSession(questions.database.oracleFile);
     status.remove();
     // Progression : réévalue les réponses enregistrées dans ce navigateur.
     for (const refs of cards.values()) await refs.restore();

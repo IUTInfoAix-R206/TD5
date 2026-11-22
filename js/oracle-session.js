@@ -15,6 +15,7 @@
 import {
   ORACLE_SETUP_SQL, Rewriter, TOKEN_RE, checkOracle, registerOracleFunctions, translateOracle,
 } from "./oracle-compat.js";
+import { canonCell } from "./canon.js";
 
 const NOT_SIMULATED = "non simulé : ";
 
@@ -55,6 +56,8 @@ export const DICTIONARY = [
   ["User_Views", ["view_Name", "text"]],
 ];
 const DICTIONARY_KEYS = DICTIONARY.map(([name]) => name.toUpperCase());
+
+const [US, RS, GS] = ["\x1f", "\x1e", "\x1d"];   // séparateurs de canon.js
 
 class SessionError extends Error {}
 const fail = (message) => { throw new SessionError(message); };
@@ -1488,5 +1491,39 @@ export class Session {
   state() {
     return Object.fromEntries(
       this.tables.map((t) => [t.key, this.rows(`SELECT * FROM ${quote(t.name)} ORDER BY rowid`)]));
+  }
+
+  // État noté d'une question LDD/LMD : { OBJET: texte canonique } (voir le jumeau Python).
+  canonicalState() {
+    const today = String(this.rows("SELECT ORA_SYSDATE()")[0][0]).slice(0, 10);
+    const rows = (name) => this.rows(`SELECT * FROM ${quote(name)}`)
+      .map((row) => row.map((v) => (typeof v === "string" && v.slice(0, 10) === today ? "\x00SYSDATE" : canonCell(v)))
+        .join(US))
+      .sort()
+      .join(RS);
+    const objects = {};
+    for (const t of this.tables) {
+      const cols = t.cols.map((c) => [c.key, displayType(c), this.notNull(t, c.key) ? "N" : "Y"].join(US)).join(RS);
+      const keys = [];
+      for (const c of t.cons) {
+        if (c.type === "P" || c.type === "U") keys.push([c.type, [...c.cols].sort().join(",")].join(US));
+        else if (c.type === "R") keys.push(["R", c.cols.join(","), c.ref, c.refcols.join(",")].join(US));
+      }
+      objects[t.key] = ["TABLE", cols, keys.sort().join(RS), rows(t.name)].join(GS);
+    }
+    for (const v of this.views) objects[v.key] = ["VIEW", String(v.cols.length), rows(v.name)].join(GS);
+    return objects;
+  }
+
+  // Essaie chaque instruction puis l'annule : code d'erreur ORA, ou OK.
+  probe(statements) {
+    return statements.map((statement) => {
+      this.execute("SAVEPOINT ora__probe");
+      const r = this.execute(statement);
+      this.execute("ROLLBACK TO ora__probe");
+      if (r.error === undefined) return "OK";
+      const m = /^((?:ORA|SP2|PLS)-[0-9]+)/.exec(r.error);
+      return m ? m[1] : "ERREUR";
+    });
   }
 }
