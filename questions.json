@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "tdId": "r2.06-td5",
   "tdLabel": "R2.06 - TD5",
-  "title": "Requêtes avec SQL",
+  "title": "Interrogations avancées en SQL",
   "intro": "Formulez, en SQL, sur la base de données exemple, les requêtes d'interrogation suivantes.",
   "database": {
     "name": "gestion-pedagogique",

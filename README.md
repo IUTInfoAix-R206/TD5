@@ -1,4 +1,4 @@
-# R2.06 - TD5 - Requêtes avec SQL
+# R2.06 - TD5 - Interrogations avancées en SQL
 
 TD de bases de données de l'IUT d'Aix-Marseille (ressource R2.06, Exploitation d'une base de données).
 
