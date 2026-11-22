@@ -1382,27 +1382,31 @@ export class Session {
       ...(cond ? [`(${cond})`] : []),
     ].join(" AND ");
     const row = `(SELECT ${alias}.rowid FROM ${base} AS ${alias} WHERE ${found} LIMIT 1)`;
-    const checks = { INSERT: "", UPDATE: "" };
+    let check = "";
+    let after = "";
     if (view.check && cond) {
       const message = raise("ORA-01402: view WITH CHECK OPTION where-clause violation");
-      for (const event of ["INSERT", "UPDATE"]) {
-        const fields = simple.table.cols.map((col) => {
-          const c = quote(col.name);
-          let expr = "NULL";
-          if (shown.has(col.key)) expr = typed(col);
-          else if (event === "UPDATE") expr = `(SELECT ${c} FROM ${base} WHERE rowid = ${row})`;
-          return `${expr} AS ${c}`;
-        });
-        checks[event] = `${message} WHERE NOT EXISTS (SELECT 1 FROM` +
-          ` (SELECT ${fields.join(", ")}) AS ${alias} WHERE ${cond}); `;
+      const fields = simple.table.cols.map((col) => `${shown.has(col.key) ? typed(col) : "NULL"} AS ${quote(col.name)}`);
+      check = `${message} WHERE NOT EXISTS (SELECT 1 FROM (SELECT ${fields.join(", ")}) AS ${alias} WHERE ${cond}); `;
+      // En UPDATE, Oracle contrôle la ligne de base (types, CHECK, clés étrangères) avant
+      // WITH CHECK OPTION ; en INSERT, WITH CHECK OPTION d'abord.
+      const byKey = new Map(simple.cols.map((b) => [b.key, b]));
+      for (const c of simple.table.cons) {
+        if (c.type !== "R" || c.deferred || !c.cols.every((k) => shown.has(k))) continue;
+        const given = c.cols.map((k) => `${typed(byKey.get(k))} IS NOT NULL`).join(" AND ");
+        const match = c.cols.map((k, i) => `${quote(c.refcols[i])} = ${typed(byKey.get(k))}`).join(" AND ");
+        after += `; ${raise("ORA-02291: integrity constraint violated - parent key not found")} WHERE ${given}` +
+          ` AND NOT EXISTS (SELECT 1 FROM ${quote(c.ref)} WHERE ${match})`;
       }
+      const same = simple.cols.map((b) => `${quote(b.name)} IS ${typed(b)}`).join(" AND ");
+      after += `; ${message} WHERE NOT EXISTS (SELECT 1 FROM ${base} AS ${alias} WHERE ${same} AND (${cond}))`;
     }
     const cols = simple.cols.map((b) => quote(b.name)).join(", ");
     const values = simple.cols.map((b) => `NEW.${shown.get(b.key)}`).join(", ");
     const sets = simple.cols.map((b) => `${quote(b.name)} = NEW.${shown.get(b.key)}`).join(", ");
     for (const [event, body] of [
-      ["INSERT", `${checks.INSERT}INSERT INTO ${base} (${cols}) VALUES (${values})`],
-      ["UPDATE", `${checks.UPDATE}UPDATE ${base} SET ${sets} WHERE rowid = ${row}`],
+      ["INSERT", `${check}INSERT INTO ${base} (${cols}) VALUES (${values})`],
+      ["UPDATE", `UPDATE ${base} SET ${sets} WHERE rowid = ${row}${after}`],
       ["DELETE", `DELETE FROM ${base} WHERE rowid = ${row}`],
     ]) {
       this.sql(`CREATE TRIGGER ${this.triggerName(view, event)} INSTEAD OF ${event} ON ${name} BEGIN ${body}; END`);

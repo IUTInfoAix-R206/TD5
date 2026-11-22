@@ -1,7 +1,7 @@
 // app.js - interface du TP SQL en ligne.
 
 import { initEngine, initSession, runQuery, runSession, getSchema } from "./engine.js";
-import { gradeSession, missingPrerequisites } from "./session-grade.js";
+import { gradeSession, lastResult, missingPrerequisites } from "./session-grade.js";
 import { hashResult } from "./canon.js";
 import { makeStore, buildExport, downloadText, exportFilename } from "./store.js";
 import { highlightSQL, highlightAlgebra } from "./highlight.js";
@@ -45,6 +45,13 @@ function upcaseHtml(html) {
 // upcaseSql : met le DDL en capitales en laissant les lignes de commentaire (--) intactes.
 function upcaseSql(text) {
   return text.split("\n").map((l) => (l.trimStart().startsWith("--") ? l : l.toUpperCase())).join("\n");
+}
+
+// Énoncé : les `noms` imposés (notation Markdown des sujets) en police de code.
+function statementNode(text) {
+  const p = el("p", { class: "q-statement" });
+  text.split(/`([^`]+)`/).forEach((part, i) => p.appendChild(i % 2 ? el("code", { text: part }) : document.createTextNode(part)));
+  return p;
 }
 
 // ── Rendu de l'en-tête ──────────────────────────────────────────────────────
@@ -420,21 +427,29 @@ function renderSteps(steps) {
   return box;
 }
 
-function renderSessionFeedback(g) {
+function renderSessionFeedback(question, g) {
   const box = el("div", { class: "feedback" });
-  if (g.exact) {
-    box.appendChild(el("span", { class: "chip chip-ok chip-strong", text: "✓ État de la base exact" }));
+  const views = question.session.mode === "views";
+  // Résultat de la dernière interrogation, noté comme une question ordinaire.
+  if (g.result) box.append(...renderFeedback(question, g.result).childNodes);
+  if (!question.session.states.length) return box;
+  if (g.state) {
+    box.appendChild(el("span", { class: "chip chip-ok" + (g.result ? "" : " chip-strong"),
+      text: views ? "✓ Vue(s) conforme(s)" : "✓ État de la base exact" }));
     return box;
   }
-  box.appendChild(el("span", { class: "chip chip-ko", text: "✗ La base n'est pas dans l'état attendu" }));
+  box.appendChild(el("span", { class: "chip chip-ko",
+    text: views ? "✗ Les vues ne sont pas celles attendues" : "✗ La base n'est pas dans l'état attendu" }));
   for (const k of g.missing) box.appendChild(el("span", { class: "chip chip-ko", text: `${k} : absente` }));
   for (const k of g.extra) box.appendChild(el("span", { class: "chip chip-ko", text: `${k} : en trop` }));
   for (const k of g.different) {
-    box.appendChild(el("span", { class: "chip chip-ko", text: `${k} : colonnes, clés ou lignes différentes` }));
+    box.appendChild(el("span", { class: "chip chip-ko", text: views
+      ? `${k} : colonnes ou lignes différentes` : `${k} : colonnes, clés ou lignes différentes` }));
   }
   if (!g.probes) {
-    box.appendChild(el("span", { class: "chip chip-warn",
-      text: "Contraintes : elles n'acceptent pas exactement les valeurs attendues" }));
+    box.appendChild(el("span", { class: "chip chip-warn", text: views
+      ? "WITH CHECK OPTION : la vue n'accepte pas exactement les modifications attendues"
+      : "Contraintes : elles n'acceptent pas exactement les valeurs attendues" }));
   }
   return box;
 }
@@ -450,7 +465,7 @@ function renderQuestion(container, question) {
   titleBits.push(status);
   card.appendChild(el("div", { class: "q-head" }, titleBits));
 
-  card.appendChild(el("p", { class: "q-statement", text: question.statement }));
+  card.appendChild(statementNode(question.statement));
   if (question.expectedLabel) {
     const what = question.session ? "Pour vérifier : " : "Attendu : ";
     card.appendChild(el("p", { class: "q-expected", text: what + question.expectedLabel }));
@@ -553,9 +568,18 @@ function renderQuestion(container, question) {
 
   async function evaluateSession(input) {
     const prefix = question.session.requires.map((id) => state.answers[id] || "");
-    const run = runSession(prefix, input, question.session.probes);
+    const run = runSession(prefix, input, question.session.probes, question.session.mode);
     if (run.error) return { compileError: run.error };
-    return { steps: run.steps, g: await gradeSession(question, run) };
+    const g = await gradeSession(question, run);
+    g.state = g.exact;
+    if (question.expectedCols !== null) {
+      const r = lastResult(run.steps);
+      g.result = r
+        ? await grade(question, { cols: r.cols, rows: r.rows }, input)
+        : { kind: "error", message: "aucune requête d'interrogation : terminez par la requête demandée" };
+      g.exact = g.state && g.result.kind === "exact";
+    }
+    return { steps: run.steps, g };
   }
 
   // Compile (algèbre), exécute et évalue une saisie : { result, g } ou { compileError }.
@@ -593,7 +617,7 @@ function renderQuestion(container, question) {
       if (locked) return;
       if (steps) {
         resultEl.replaceChildren(renderSteps(steps));
-        feedbackEl.replaceChildren(renderSessionFeedback(g));
+        feedbackEl.replaceChildren(renderSessionFeedback(question, g));
         setStatus(g.exact);
         await afterChange();
         return;
@@ -651,7 +675,7 @@ function renderQuestion(container, question) {
 function renderTheory(container, question) {
   const card = el("section", { class: "question-card question-theory", attrs: { id: question.id } });
   card.appendChild(el("div", { class: "q-head" }, [el("span", { class: "q-num", text: "Q" + question.num })]));
-  card.appendChild(el("p", { class: "q-statement", text: question.statement }));
+  card.appendChild(statementNode(question.statement));
   card.appendChild(el("p", { class: "q-theory-note", text: question.theoryNote || "Question de cours - pas d'auto-évaluation." }));
   container.appendChild(card);
 }

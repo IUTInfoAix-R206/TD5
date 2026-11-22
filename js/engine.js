@@ -47,11 +47,11 @@ export async function initSession(oracleUrl) {
 }
 
 // Exécute une réponse LDD/LMD : voir session-grade.js.
-export function runSession(prefix, answer, probes) {
+export function runSession(prefix, answer, probes, mode) {
   if (!SQL || oracleScript === null) {
     return { error: "Le moteur SQL est encore en cours de chargement : réessayez dans un instant." };
   }
-  return runSessionAnswer(SQL, oracleScript, prefix, answer, probes);
+  return runSessionAnswer(SQL, oracleScript, prefix, answer, probes, mode);
 }
 
 // Garde-fous : sql.js s'exécute dans le fil principal ; une requête sans fin (CTE
