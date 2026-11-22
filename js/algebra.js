@@ -7,7 +7,7 @@
 //   - renommage : RENOMMAGE (R / ancien -> nouveau, ...) (flèche -> ou →)
 //   - noms de relations : R1, R2.1, avec primes R'4.1, R''6.1 ; chacun affecté une seule fois
 //   - connecteurs booléens : ET / OU / NON (+ parenthèses)
-//   - comparaisons : = <> != < > <= >= ; chaînes '...' ; nombres ; temps HH:MM (non quoté) ;
+//   - comparaisons : = <> (!=, ≠) < > <= (≤) >= (≥) ; chaînes '...' ; nombres ; temps HH:MM (non quoté) ;
 //     ou un autre attribut de la relation (SELECTION (R / adresse = villeDep))
 //   - commentaires : -- jusqu'en fin de ligne ; la dernière relation affectée = réponse
 //
@@ -48,6 +48,8 @@ export function keywordOf(word) {
 
 // ── Tokenizer ────────────────────────────────────────────────────────────────
 
+// Symboles mathématiques acceptés comme comparateurs -> forme canonique (celle du SQL).
+const MATH_CMP = new Map([["≠", "<>"], ["≤", "<="], ["≥", ">="]]);
 const IDENT_START = /[A-Za-z_\u00C0-\u024F]/;
 const IDENT_CHAR = /[A-Za-z0-9_\u00C0-\u024F]/;
 
@@ -76,6 +78,7 @@ function tokenize(src) {
     if (c === "<" && src[i + 1] === ">") { push("CMP", "<>"); adv(2); continue; }
     if (c === "!" && src[i + 1] === "=") { push("CMP", "<>"); adv(2); continue; } // != (synonyme de <>)
     if (c === "=" || c === "<" || c === ">") { push("CMP", c); adv(); continue; }
+    if (MATH_CMP.has(c)) { push("CMP", MATH_CMP.get(c)); adv(); continue; }
     // Ponctuation
     if (c === "(") { push("LPAREN", "("); adv(); continue; }
     if (c === ")") { push("RPAREN", ")"); adv(); continue; }
@@ -166,7 +169,7 @@ function parse(toks) {
   function parseComparison() {
     const attr = attrName();
     const t = peek();
-    if (t.type !== "CMP") throw new AlgebraError("comparateur attendu (= <> != < > <= >=)", t.line);
+    if (t.type !== "CMP") throw new AlgebraError("comparateur attendu (= <> != ≠ < > <= ≤ >= ≥)", t.line);
     const op = next().value;
     const ot = peek();
     if (ot.type === "STRING") { next(); return { c: "cmp", attr, op, operand: operand("str", ot.value) }; }

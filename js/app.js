@@ -147,8 +147,8 @@ R2 := PROJECTION (R1 / numAv, nomAv)</pre>
       <tr><td>DIVISION</td><td>DIVISION (R1, R2)</td></tr>
     </tbody></table>
     <p class="syntax-note">
-      Conditions : comparateurs <code>=</code> <code>&lt;&gt;</code> (ou <code>!=</code>) <code>&lt;</code> <code>&gt;</code>
-      <code>&lt;=</code> <code>&gt;=</code> ; connecteurs <code>ET</code> / <code>OU</code> / <code>NON</code> ;
+      Conditions : comparateurs <code>=</code> <code>&lt;&gt;</code> (ou <code>!=</code>, <code>≠</code>) <code>&lt;</code> <code>&gt;</code>
+      <code>&lt;=</code> (ou <code>≤</code>) <code>&gt;=</code> (ou <code>≥</code>) ; connecteurs <code>ET</code> / <code>OU</code> / <code>NON</code> ;
       chaînes entre apostrophes <code>'TEXTE'</code> ; heures <code>HH:MM</code> ;
       comparaison entre deux attributs (<code>adresse = villeDep</code>) ;
       commentaire <code>--</code> en fin de ligne ; noms de relations du type

@@ -258,7 +258,7 @@ function algebraCandidates(textBefore, start, schema) {
 
 // Jetons d'un fragment d'algèbre (chaînes, heures, nombres, mots, symboles).
 const ALG_TOKEN = /'[^']*'|\d{1,2}:\d{2}|\d+(?:\.\d+)?|[A-Za-z_\u00C0-\u024F][\w.\u00C0-\u024F\u2032]*|->|→|<=|>=|<>|!=|=|<|>|\S/g;
-const isCmp = (t) => /^(<=|>=|<>|!=|=|<|>)$/.test(t || "");
+const isCmp = (t) => /^(<=|>=|<>|!=|=|<|>|≠|≤|≥)$/.test(t || "");
 const isWord = (t) => /^[A-Za-z_À-ɏ]/.test(t || "");
 const BOOL_KW = new Set(["ET", "OU", "NON"]);
 const isBool = (t) => isWord(t) && BOOL_KW.has(fold(t).toUpperCase());
